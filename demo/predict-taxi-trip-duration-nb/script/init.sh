@@ -21,16 +21,20 @@ if [ $# -gt 0 ]; then
     MODE=$1
 fi
 pkill python3
+pkill java
 rm -rf /tmp/*
-rm -rf /work/openmldb/logs*
-rm -rf /work/openmldb/db*
+rm -rf /work/puslar/apache-pulsar-2.9.1/data
+rm -rf /work/puslar/apache-pulsar-2.9.1/logs
+cd /work/openmldb && rm -rf logs* && rm -rf db* && cd -
 sleep 2
 if [[ "$MODE" = "standalone" ]]; then
     python3 convert_data.py < data/taxi_tour_table_train_simple.csv  > ./data/taxi_tour.csv
     cd /work/openmldb && ./bin/stop-standalone.sh && ./bin/start-standalone.sh
     sleep 1
 else
-    cd /work/zookeeper-3.4.14 && ./bin/zkServer.sh restart
+    sleep 2
+    cd /work/puslar/apache-pulsar-2.9.1 && ./bin/pulsar-daemon start standalone
     sleep 1
-    cd /work/openmldb && ./bin/stop-all.sh && ./bin/start-all.sh
+    cd /work/openmldb && ./bin/stop-all.sh
+    ./bin/start-all.sh
 fi
