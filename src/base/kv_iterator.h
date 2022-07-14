@@ -70,12 +70,18 @@ class ScanKvIterator : public KvIterator {
         is_finish_ = response->is_finish();
         tsize_ = response->pairs().size();
         pk_ = pk;
+        size_ = response->count();
         Next();
     }
 
     bool Valid();
 
     void Next();
+
+    int Size() { return size_; }
+
+  private:
+    int size_;
 };
 
 class TraverseKvIterator : public KvIterator {

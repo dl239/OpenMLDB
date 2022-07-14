@@ -146,6 +146,12 @@ target_link_libraries(parse_log ${LINK_LIBS})
 
 add_executable(openmldb cmd/openmldb.cc base/linenoise.cc)
 target_link_libraries(openmldb ${BIN_LIBS})
+add_executable(earthquake_app tools/earthquake_app.cc tools/noisepsd.cc tools/equation.cc  $<TARGET_OBJECTS:openmldb_proto>)
+add_executable(import_data tools/import_data.cc $<TARGET_OBJECTS:openmldb_proto>)
+add_executable(write_data tools/write_data.cc)
+target_link_libraries(import_data ${BIN_LIBS} mseed)
+target_link_libraries(earthquake_app ${BIN_LIBS})
+target_link_libraries(write_data ${BIN_LIBS} mseed)
 
 install(
     TARGETS openmldb
