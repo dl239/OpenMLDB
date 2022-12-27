@@ -103,7 +103,7 @@ class ServerChecker:
         if len(result) < 1:
             log.warn('run job failed. no job info returned')
             return False
-        job_id = result[0][0].split('\n')[3].strip().split(' ')[0]
+        job_id = result[0][0]
         time.sleep(2)
         while True:
             status = self.get_job_status(job_id)
