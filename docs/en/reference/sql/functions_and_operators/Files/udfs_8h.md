@@ -46,6 +46,7 @@ title: udfs/udfs.h
 | **[degrees](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-degrees)**()| <br>Convert radians to degrees. |
 | **[distinct_count](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-distinct-count)**()| <br>Compute number of distinct values. |
 | **[double](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-double)**()| <br>Cast string expression to double. |
+| **[ew_avg](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-ew-avg)**()| <br>Compute exponentially-weighted average of values. It's equivalent to pandas ewm(alpha=<alpha>, adjust=True, ignore_na=True, com=None, span=None, halflife=None, min_periods=0) |
 | **[exp](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-exp)**()| <br>Return the value of e (the base of natural logarithms) raised to the power of expr. |
 | **[farm_fingerprint](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-farm-fingerprint)**()| <br>Returns a hash value of the arguments. It is not a cryptographic hash function and should not be used as such. |
 | **[first_value](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-first-value)**()| <br>Returns the value of expr from the latest row (last row) of the window frame. |
@@ -115,6 +116,10 @@ title: udfs/udfs.h
 | **[split_by_key](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-split-by-key)**()| <br>Split string by delimeter and split each segment as kv pair, then add each key to output list. Null or illegal segments are skipped. |
 | **[split_by_value](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-split-by-value)**()| <br>Split string by delimeter and split each segment as kv pair, then add each value to output list. Null or illegal segments are skipped. |
 | **[sqrt](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-sqrt)**()| <br>Return square root of expr. |
+| **[std](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-std)**()| <br>Compute sample standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / (n-1) )`|
+| **[stddev](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-stddev)**()| <br>Compute sample standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / (n-1) )`|
+| **[stddev_pop](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-stddev-pop)**()| <br>Compute population standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / n )`|
+| **[stddev_samp](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-stddev-samp)**()| <br>Compute sample standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / (n-1) )`|
 | **[strcmp](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-strcmp)**()| <br>Returns 0 if the strings are the same, -1 if the first argument is smaller than the second according to the current sort order, and 1 otherwise. |
 | **[string](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-string)**()| <br>Return string converted from timestamp expression. |
 | **[substr](/openmldb_sql/functions_and_operators/Files/udfs_8h.md#function-substr)**()| <br>Return a substring `len` characters long from string str, starting at position `pos`. Alias function: `substr`|
@@ -1468,6 +1473,52 @@ select double("1.23");
 **Supported Types**:
 
 * [`string`] 
+
+### function ew_avg
+
+```cpp
+ew_avg()
+```
+
+**Description**:
+
+Compute exponentially-weighted average of values. It's equivalent to pandas ewm(alpha=<alpha>, adjust=True, ignore_na=True, com=None, span=None, halflife=None, min_periods=0) 
+
+**Parameters**: 
+
+  * **value** Specify value column to aggregate on. 
+  * **alpha** Specify smoothing factor alpha (0 <= alpha <= 1). If NULL or 0, fall back to normal `avg`
+
+
+**Since**:
+0.7.2
+
+
+It requires that values are ordered so that it can only be used with WINDOW (PARTITION BY xx ORDER BY xx). Undefined behaviour if it is used with GROUP BY and full table aggregation.
+
+
+Example:
+
+
+| value     |
+|  -------- |
+| 0     |
+| 1     |
+| 2     |
+| 3     |
+| 4    |
+
+
+```sql
+
+SELECT ew_avg(value, 0.5) OVER w;
+-- output 3.161290
+```
+
+
+**Supported Types**:
+
+* [`list<number>`, `list<double>`] 
 
 ### function exp
 
@@ -3835,6 +3886,180 @@ SELECT SQRT(100);
 **Supported Types**:
 
 * [`number`] 
+
+### function std
+
+```cpp
+std()
+```
+
+**Description**:
+
+Compute sample standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / (n-1) )`
+
+**Parameters**: 
+
+  * **value** Specify value column to aggregate on.
+
+
+**Since**:
+0.7.2
+
+
+Alias function: `std`, `stddev_samp`
+
+
+Example:
+
+
+| value     |
+|  -------- |
+| 1     |
+| 2     |
+| 3     |
+| 4    |
+
+
+```sql
+
+SELECT stddev(value) OVER w;
+-- output 1.290994
+```
+
+
+**Supported Types**:
+
+* [`list<number>`] 
+
+### function stddev
+
+```cpp
+stddev()
+```
+
+**Description**:
+
+Compute sample standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / (n-1) )`
+
+**Parameters**: 
+
+  * **value** Specify value column to aggregate on.
+
+
+**Since**:
+0.7.2
+
+
+Alias function: `std`, `stddev_samp`
+
+
+Example:
+
+
+| value     |
+|  -------- |
+| 1     |
+| 2     |
+| 3     |
+| 4    |
+
+
+```sql
+
+SELECT stddev(value) OVER w;
+-- output 1.290994
+```
+
+
+**Supported Types**:
+
+* [`list<number>`] 
+
+### function stddev_pop
+
+```cpp
+stddev_pop()
+```
+
+**Description**:
+
+Compute population standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / n )`
+
+**Parameters**: 
+
+  * **value** Specify value column to aggregate on.
+
+
+**Since**:
+0.7.2
+
+
+
+Example:
+
+
+| value     |
+|  -------- |
+| 1     |
+| 2     |
+| 3     |
+| 4    |
+
+
+```sql
+
+SELECT stddev_pop(value) OVER w;
+-- output 1.118034
+```
+
+
+**Supported Types**:
+
+* [`list<number>`] 
+
+### function stddev_samp
+
+```cpp
+stddev_samp()
+```
+
+**Description**:
+
+Compute sample standard deviation of values, i.e., `sqrt( sum((x_i - avg)^2) / (n-1) )`
+
+**Parameters**: 
+
+  * **value** Specify value column to aggregate on.
+
+
+**Since**:
+0.7.2
+
+
+Alias function: `std`, `stddev_samp`
+
+
+Example:
+
+
+| value     |
+|  -------- |
+| 1     |
+| 2     |
+| 3     |
+| 4    |
+
+
+```sql
+
+SELECT stddev(value) OVER w;
+-- output 1.290994
+```
+
+
+**Supported Types**:
+
+* [`list<number>`] 
 
 ### function strcmp
 
