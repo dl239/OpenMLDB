@@ -51,6 +51,10 @@ public class LinuxUtil {
         return false;
     }
 
+    public static void mkdir(String path) {
+        ExecutorUtil.run("mkdir -p " + path);
+    }
+
     public static boolean cp(String src,String dst,String removePath){
         if(StringUtils.isNotEmpty(removePath)) {
             String command = "rm -rf " + removePath;
@@ -127,13 +131,10 @@ public class LinuxUtil {
         ExecutorUtil.run(command);
     }
     public static boolean fileIsExist(String filePath){
-        String command = "ls -al "+filePath;
-        List<String> result = ExecutorUtil.run(command);
-        if(result.size()==0){
-            return false;
-        }
-        return !result.get(0).contains("No such file or directory");
+        File file = new File(filePath);
+        return file.exists();
     }
+
     public static void rm(String path){
         String command = "rm -rf "+path;
         ExecutorUtil.run(command);

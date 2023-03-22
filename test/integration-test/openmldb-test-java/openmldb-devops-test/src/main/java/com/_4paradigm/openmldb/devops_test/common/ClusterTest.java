@@ -45,7 +45,7 @@ public class ClusterTest {
     protected String openMLDBPath;
     @BeforeTest()
     @Parameters({"env","version","openMLDBPath"})
-    public void beforeTest(@Optional("qa") String env,@Optional("main") String version,@Optional("")String openMLDBPath) throws Exception {
+    public void beforeTest(@Optional("cluster") String env,@Optional("main") String version,@Optional("")String openMLDBPath) throws Exception {
         OpenMLDBGlobalVar.env = env;
         this.version = version;
         this.openMLDBPath = openMLDBPath;

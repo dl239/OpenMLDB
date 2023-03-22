@@ -6,6 +6,8 @@ import org.testng.annotations.Optional;
 import org.testng.annotations.Parameters;
 import org.testng.annotations.Test;
 
+import java.io.File;
+
 public class TmpDeploy {
     @Test
     @Parameters({"version","openMLDBPath"})

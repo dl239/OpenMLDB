@@ -33,6 +33,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 @Slf4j
 @Setter
@@ -40,7 +41,7 @@ public class OpenMLDBDeploy {
     private String installPath;
     private String version;
     private String openMLDBUrl;
-    private String openMLDBDirectoryName;
+    private String openMLDBDirectoryName = "openmldb";
     private String sparkHome;
     private String openMLDBPath;
     private boolean useName;
@@ -80,13 +81,12 @@ public class OpenMLDBDeploy {
         log.info("openmldb-info:"+openMLDBInfo);
         return openMLDBInfo;
     }
+
     public OpenMLDBInfo deployCluster(int ns, int tablet){
-        return deployCluster(null,ns,tablet);
+        return deployCluster(null, ns, tablet);
     }
+
     public OpenMLDBInfo deployCluster(String clusterName, int ns, int tablet){
-        OpenMLDBInfo openMLDBInfo = new OpenMLDBInfo();
-//        OpenMLDBInfo.OpenMLDBInfoBuilder builder = OpenMLDBInfo.builder();
-        openMLDBInfo.setDeployType(OpenMLDBDeployType.CLUSTER);
         String testPath = DeployUtil.getTestPath(version);
         if(StringUtils.isNotEmpty(installPath)){
             testPath = installPath+"/"+version;
@@ -94,18 +94,29 @@ public class OpenMLDBDeploy {
         if(StringUtils.isNotEmpty(clusterName)) {
             testPath = testPath + "/" + clusterName;
         }
-        openMLDBInfo.setNsNum(ns);
-        openMLDBInfo.setTabletNum(tablet);
-        openMLDBInfo.setBasePath(testPath);
-//        builder.nsNum(ns).tabletNum(tablet).basePath(testPath);
-        String ip = LinuxUtil.hostnameI();
         File file = new File(testPath);
         if(!file.exists()){
             file.mkdirs();
         }
+        preparePackage(testPath);
+        return installOpenMLDB(clusterName, testPath, ns, tablet);
+    }
+
+    public void preparePackage(String testPath) {
+        downloadZK(testPath);
+        downloadOpenMLDB(testPath);
+    }
+
+    public OpenMLDBInfo installOpenMLDB(String clusterName, String testPath, int ns, int tablet) {
+        OpenMLDBInfo openMLDBInfo = new OpenMLDBInfo();
+        openMLDBInfo.setDeployType(OpenMLDBDeployType.CLUSTER);
+        openMLDBInfo.setNsNum(ns);
+        openMLDBInfo.setTabletNum(tablet);
+        openMLDBInfo.setBasePath(testPath);
+
         int zkPort = deployZK(testPath);
-        String openMLDBDirectoryName = downloadOpenMLDB(testPath);
-        String zk_point = ip+":"+zkPort;
+        String ip = LinuxUtil.hostnameI();
+        String zk_point = ip + ":" + zkPort;
         openMLDBInfo.setZk_cluster(zk_point);
         openMLDBInfo.setZk_root_path("/openmldb");
         openMLDBInfo.setNsEndpoints(Lists.newArrayList());
@@ -116,16 +127,9 @@ public class OpenMLDBDeploy {
         openMLDBInfo.setApiServerNames(Lists.newArrayList());
         openMLDBInfo.setTaskManagerEndpoints(Lists.newArrayList());
         openMLDBInfo.setOpenMLDBPath(testPath+"/openmldb-ns-1/bin/openmldb");
+        String openMLDBDirectoryName = testPath + "/openmldb";
         openMLDBInfo.setOpenMLDBDirectoryName(openMLDBDirectoryName);
-//        builder.zk_cluster(zk_point).zk_root_path("/openmldb");
-//        builder.nsEndpoints(Lists.newArrayList()).nsNames(Lists.newArrayList());
-//        builder.tabletEndpoints(Lists.newArrayList()).tabletNames(Lists.newArrayList());
-//        builder.apiServerEndpoints(Lists.newArrayList()).apiServerNames(Lists.newArrayList());
-//        builder.taskManagerEndpoints(Lists.newArrayList());
-//        builder.openMLDBPath(testPath+"/openmldb-ns-1/bin/openmldb");
-//        builder.openMLDBDirectoryName(openMLDBDirectoryName);
-//        OpenMLDBInfo openMLDBInfo = builder.build();
-        for(int i=1;i<=tablet;i++) {
+        for(int i = 1; i <= tablet; i++) {
             int tablet_port ;
             if(useName){
                 String tabletName = clusterName+"-tablet-"+i;
@@ -137,7 +141,7 @@ public class OpenMLDBDeploy {
             openMLDBInfo.getTabletEndpoints().add(ip+":"+tablet_port);
             Tool.sleep(SLEEP_TIME);
         }
-        for(int i=1;i<=ns;i++){
+        for(int i = 1; i <= ns; i++){
             int ns_port;
             if(useName){
                 String nsName = clusterName+"-ns-"+i;
@@ -150,7 +154,7 @@ public class OpenMLDBDeploy {
             Tool.sleep(SLEEP_TIME);
         }
 
-        for(int i=1;i<=1;i++) {
+        for(int i = 1; i <= 1; i++) {
             int apiserver_port ;
             if(useName){
                 String apiserverName = clusterName+"-apiserver-"+i;
@@ -162,115 +166,153 @@ public class OpenMLDBDeploy {
             openMLDBInfo.getApiServerEndpoints().add(ip+":"+apiserver_port);
             Tool.sleep(SLEEP_TIME);
         }
-        if(version.equals("tmp")||version.compareTo("0.4.0")>=0) {
+        /*if(version.equals("tmp") || version.compareTo("0.4.0")>=0) {
             for (int i = 1; i <= 1; i++) {
                 int task_manager_port = deployTaskManager(testPath, ip, i, zk_point);
                 openMLDBInfo.getTaskManagerEndpoints().add(ip + ":" + task_manager_port);
                 openMLDBInfo.setSparkHome(sparkHome);
             }
-        }
+        }*/
         log.info("openmldb-info:"+openMLDBInfo);
         return openMLDBInfo;
     }
 
     public String downloadOpenMLDB(String testPath){
+        String openMLDBDir = testPath + "/openmldb";
         try {
-            String command;
-            log.info("openMLDBUrl:{}",openMLDBUrl);
-            if(openMLDBUrl.startsWith("http")) {
-                command = "wget -P " + testPath + " -q " + openMLDBUrl;
-            }else{
-                command = "cp -r " + openMLDBUrl +" "+ testPath;
+            if (LinuxUtil.fileIsExist(openMLDBDir)) {
+                LinuxUtil.rm(openMLDBDir);
             }
-            ExecutorUtil.run(command);
-            String packageName = openMLDBUrl.substring(openMLDBUrl.lastIndexOf("/") + 1);
-            command = "ls " + testPath + " | grep "+packageName;
-            List<String> result = ExecutorUtil.run(command);
-            String tarName = result.get(0);
-            command = "tar -zxvf " + testPath + "/"+tarName+" -C "+testPath;
-            ExecutorUtil.run(command);
-            command = "ls " + testPath + " | grep openmldb | grep -v .tar.gz";
-            result = ExecutorUtil.run(command);
-            if (result != null && result.size() > 0) {
-                openMLDBDirectoryName = result.get(0);
-                log.info("FEDB下载成功:{}", openMLDBDirectoryName);
-                return openMLDBDirectoryName;
-            }else{
-                throw new RuntimeException("FEDB下载失败");
+            LinuxUtil.mkdir(openMLDBDir);
+            if (version.equals("main")) {
+                String projectDir = System.getProperty("user.dir");
+                File file = new File(projectDir);
+                String baseDir = file.getParentFile().getParentFile().getParentFile().getParent();
+                LinuxUtil.cp(baseDir + "/release/*", openMLDBDir);
+                LinuxUtil.cp(baseDir + "/build/bin/openmldb", openMLDBDir + "/bin/");
+            } else {
+                String command;
+                log.info("openMLDBUrl:{}", openMLDBUrl);
+                String packageName = openMLDBUrl.substring(openMLDBUrl.lastIndexOf("/") + 1);
+                if (!LinuxUtil.fileIsExist(testPath + "/" + packageName)) {
+                    if (openMLDBUrl.startsWith("http")) {
+                        command = "wget -P " + testPath + " -q " + openMLDBUrl;
+                    } else {
+                        command = "cp -r " + openMLDBUrl + " " + testPath;
+                    }
+                    ExecutorUtil.run(command);
+                }
+                command = "ls " + testPath + " | grep " + packageName;
+                List<String> result = ExecutorUtil.run(command);
+                String tarName = result.get(0);
+                if (LinuxUtil.fileIsExist(testPath + "/" + tarName)) {
+                    command = "tar -zxvf " + testPath + "/" + tarName + " -C " + testPath;
+                    ExecutorUtil.run(command);
+                }
+                command = "ls " + testPath + " | grep openmldb | grep -v .tar.gz";
+                result = ExecutorUtil.run(command);
+                String openMLDBDirectoryName;
+                if (result != null && result.size() > 0) {
+                    openMLDBDirectoryName = result.get(0);
+                    log.info("download OpenMLDB success:{}", openMLDBDirectoryName);
+                } else {
+                    throw new RuntimeException("download OpenMLDB failed");
+                }
+                ExecutorUtil.run("mv " + openMLDBDirectoryName + " " + openMLDBDir);
             }
         }catch (Exception e){
             e.printStackTrace();
             throw new RuntimeException(e);
         }
+        return openMLDBDir;
     }
+
+    public void downloadZK(String testPath) {
+        try {
+            if (!LinuxUtil.fileIsExist(testPath+"/zookeeper-3.4.14.tar.gz")) {
+                ExecutorUtil.run("wget -P "+testPath+" "+ OpenMLDBDeployConfig.getZKUrl(version));
+            }
+            if (LinuxUtil.fileIsExist(testPath+"/zookeeper-3.4.14")) {
+                ExecutorUtil.run("rm -rf "+ testPath+ "/zookeeper-3.4.14");
+            }
+            ExecutorUtil.run("tar -zxvf "+ testPath+ "/zookeeper-3.4.14.tar.gz -C "+testPath);
+        }catch (Exception e){
+            e.printStackTrace();
+            throw new RuntimeException("download zk failed");
+        }
+    }
+
     public int deployZK(String testPath){
+        String zkDir = testPath + "/zookeeper-3.4.14";
         try {
             int port = LinuxUtil.getNoUsedPort();
             String[] commands = {
-                    "wget -P "+testPath+" "+ OpenMLDBDeployConfig.getZKUrl(version),
-                    "tar -zxvf "+testPath+"/zookeeper-3.4.14.tar.gz -C "+testPath,
-                    "cp "+testPath+"/zookeeper-3.4.14/conf/zoo_sample.cfg "+testPath+"/zookeeper-3.4.14/conf/zoo.cfg",
-                    "sed -i "+sedSeparator+" 's#dataDir=/tmp/zookeeper#dataDir="+testPath+"/data#' "+testPath+"/zookeeper-3.4.14/conf/zoo.cfg",
-                    "sed -i "+sedSeparator+" 's#clientPort=2181#clientPort="+port+"#' "+testPath+"/zookeeper-3.4.14/conf/zoo.cfg",
-                    "sh "+testPath+"/zookeeper-3.4.14/bin/zkServer.sh start"
+                    "cp "+ zkDir +"/conf/zoo_sample.cfg " + zkDir +"/conf/zoo.cfg",
+                    "sed -i "+sedSeparator+" 's#dataDir=/tmp/zookeeper#dataDir="+ zkDir +"/data#' " + zkDir + "/conf/zoo.cfg",
+                    "sed -i "+sedSeparator+" 's#clientPort=2181#clientPort="+port+"#' "+ zkDir +"/conf/zoo.cfg",
+                    "sh "+ zkDir +"/bin/zkServer.sh start"
             };
             for(String command:commands){
                 ExecutorUtil.run(command);
             }
             boolean used = LinuxUtil.checkPortIsUsed(port,3000,30);
             if(used){
-                log.info("zk部署成功，port："+port);
+                log.info("deploy zk success，port："+port);
                 return port;
             }
         }catch (Exception e){
             e.printStackTrace();
         }
-        throw new RuntimeException("zk部署失败");
+        throw new RuntimeException("deploy zk failed");
     }
 
     public int deployNS(String testPath, String ip, int index, String zk_endpoint, String name){
+        int port = LinuxUtil.getNoUsedPort();
+        String ns_name = "/openmldb-ns-"+index;
+        String deployPath = testPath + ns_name;
         try {
-            int port = LinuxUtil.getNoUsedPort();
-            String ns_name = "/openmldb-ns-"+index;
+            if (LinuxUtil.fileIsExist(deployPath)) {
+                LinuxUtil.rm(deployPath);
+            }
             List<String> commands = Lists.newArrayList(
-                    "cp -r " + testPath + "/" + openMLDBDirectoryName + " " + testPath + ns_name,
-                    "cp " + testPath + ns_name + "/conf/nameserver.flags.template " + testPath + ns_name + "/conf/nameserver.flags",
-                    "sed -i "+sedSeparator+" 's#--zk_cluster=.*#--zk_cluster=" + zk_endpoint + "#' " + testPath + ns_name + "/conf/nameserver.flags",
-                    "sed -i "+sedSeparator+" 's@--zk_root_path=.*@--zk_root_path=/openmldb@' "+testPath+ns_name+"/conf/nameserver.flags",
-                    "sed -i "+sedSeparator+" 's@#--zk_cluster=.*@--zk_cluster=" + zk_endpoint + "@' " + testPath + ns_name + "/conf/nameserver.flags",
-                    "sed -i "+sedSeparator+" 's@#--zk_root_path=.*@--zk_root_path=/openmldb@' "+testPath+ns_name+"/conf/nameserver.flags",
-                    "sed -i "+sedSeparator+" 's@--tablet=.*@#--tablet=127.0.0.1:9921@' "+testPath+ns_name+"/conf/nameserver.flags",
-                    "sed -i "+sedSeparator+" 's@--tablet_heartbeat_timeout=.*@--tablet_heartbeat_timeout=1000@' "+testPath+ns_name+"/conf/nameserver.flags",
-                    "echo '--request_timeout_ms=60000' >> " + testPath + ns_name + "/conf/nameserver.flags"
+                    "cp -r " + testPath + "/" + openMLDBDirectoryName + " " + deployPath,
+                    "cp " + deployPath + "/conf/nameserver.flags.template " + deployPath + "/conf/nameserver.flags",
+                    "sed -i "+sedSeparator+" 's#--zk_cluster=.*#--zk_cluster=" + zk_endpoint + "#' " + deployPath + "/conf/nameserver.flags",
+                    "sed -i "+sedSeparator+" 's@--zk_root_path=.*@--zk_root_path=/openmldb@' "+ deployPath +"/conf/nameserver.flags",
+                    "sed -i "+sedSeparator+" 's@#--zk_cluster=.*@--zk_cluster=" + zk_endpoint + "@' " + deployPath + "/conf/nameserver.flags",
+                    "sed -i "+sedSeparator+" 's@#--zk_root_path=.*@--zk_root_path=/openmldb@' "+ deployPath +"/conf/nameserver.flags",
+                    "sed -i "+sedSeparator+" 's@--tablet=.*@#--tablet=127.0.0.1:9921@' "+ deployPath +"/conf/nameserver.flags",
+                    "sed -i "+sedSeparator+" 's@--tablet_heartbeat_timeout=.*@--tablet_heartbeat_timeout=1000@' "+ deployPath +"/conf/nameserver.flags",
+                    "echo '--request_timeout_ms=60000' >> " + deployPath + "/conf/nameserver.flags"
             );
             // --system_table_replica_num=2
             if(systemTableReplicaNum!=2){
-                commands.add("sed -i "+sedSeparator+" 's@--system_table_replica_num=.*@--system_table_replica_num="+systemTableReplicaNum+"@' " + testPath + ns_name + "/conf/nameserver.flags");
+                commands.add("sed -i "+sedSeparator+" 's@--system_table_replica_num=.*@--system_table_replica_num="+systemTableReplicaNum+"@' " + deployPath + "/conf/nameserver.flags");
             }
             if(useName){
-                commands.add("sed -i "+sedSeparator+" 's/--endpoint=.*/#&/' " + testPath + ns_name + "/conf/nameserver.flags");
-                commands.add("echo '--use_name=true' >> " + testPath + ns_name + "/conf/nameserver.flags");
-                commands.add("echo '--port=" + port + "' >> " + testPath + ns_name + "/conf/nameserver.flags");
+                commands.add("sed -i "+sedSeparator+" 's/--endpoint=.*/#&/' " + deployPath + "/conf/nameserver.flags");
+                commands.add("echo '--use_name=true' >> " + deployPath + "/conf/nameserver.flags");
+                commands.add("echo '--port=" + port + "' >> " + deployPath + "/conf/nameserver.flags");
                 if(name!=null){
-                    commands.add("mkdir -p " + testPath + ns_name + "/data");
-                    commands.add("echo " + name + " >> " + testPath + ns_name + "/data/name.txt");
+                    commands.add("mkdir -p " + deployPath + "/data");
+                    commands.add("echo " + name + " >> " + deployPath + "/data/name.txt");
                 }
             }else{
                 String ip_port = ip+":"+port;
-                commands.add("sed -i "+sedSeparator+" 's#--endpoint=.*#--endpoint=" + ip_port + "#' " + testPath + ns_name + "/conf/nameserver.flags");
+                commands.add("sed -i "+sedSeparator+" 's#--endpoint=.*#--endpoint=" + ip_port + "#' " + deployPath + "/conf/nameserver.flags");
             }
             if(isCluster){
-                commands.add("sed -i "+sedSeparator+" 's@#--enable_distsql=.*@--enable_distsql=true@' " + testPath + ns_name + "/conf/nameserver.flags");
+                commands.add("sed -i "+sedSeparator+" 's@#--enable_distsql=.*@--enable_distsql=true@' " + deployPath + "/conf/nameserver.flags");
                 // commands.add("echo '--enable_distsql=true' >> " + testPath + ns_name + "/conf/nameserver.flags");
             }else{
-                commands.add("sed -i "+sedSeparator+" 's@#--enable_distsql=.*@--enable_distsql=false@' " + testPath + ns_name + "/conf/nameserver.flags");
+                commands.add("sed -i "+sedSeparator+" 's@#--enable_distsql=.*@--enable_distsql=false@' " + deployPath + "/conf/nameserver.flags");
             }
             commands.forEach(ExecutorUtil::run);
             if(StringUtils.isNotEmpty(openMLDBPath)){
-                OpenMLDBCommandUtil.cpOpenMLDB(testPath+ns_name, openMLDBPath);
+                OpenMLDBCommandUtil.cpOpenMLDB(deployPath, openMLDBPath);
             }
 //            ExecutorUtil.run("sh "+testPath+ns_name+"/bin/start_ns.sh start");
-            ExecutorUtil.run("sh "+testPath+ns_name+"/bin/start.sh start nameserver");
+            ExecutorUtil.run("sh "+ deployPath + "/bin/start.sh start nameserver");
             boolean used = LinuxUtil.checkPortIsUsed(port,3000,30);
             if(used){
                 log.info("ns部署成功，port："+port);
@@ -282,9 +324,13 @@ public class OpenMLDBDeploy {
         throw new RuntimeException("ns部署失败");
     }
     public int deployTablet(String testPath, String ip, int index, String zk_endpoint, String name){
+        int port = LinuxUtil.getNoUsedPort();
+        String tablet_name = "/openmldb-tablet-"+index;
+        String deployPath = testPath + tablet_name;
         try {
-            int port = LinuxUtil.getNoUsedPort();
-            String tablet_name = "/openmldb-tablet-"+index;
+            if (LinuxUtil.fileIsExist(deployPath)) {
+                LinuxUtil.rm(deployPath);
+            }
             List<String> commands = Lists.newArrayList(
                     "cp -r "+testPath+"/"+ openMLDBDirectoryName +" "+testPath+tablet_name,
                     "cp " + testPath+tablet_name + "/conf/tablet.flags.template " + testPath+tablet_name + "/conf/tablet.flags",
@@ -336,9 +382,13 @@ public class OpenMLDBDeploy {
         throw new RuntimeException("tablet部署失败");
     }
     public int deployApiserver(String testPath, String ip, int index, String zk_endpoint, String name){
+        int port = LinuxUtil.getNoUsedPort();
+        String apiserver_name = "/openmldb-apiserver-"+index;
+        String deployPath = testPath + apiserver_name;
         try {
-            int port = LinuxUtil.getNoUsedPort();
-            String apiserver_name = "/openmldb-apiserver-"+index;
+            if (LinuxUtil.fileIsExist(deployPath)) {
+                LinuxUtil.rm(deployPath);
+            }
             List<String> commands = Lists.newArrayList(
                     "cp -r "+testPath+"/"+ openMLDBDirectoryName +" "+testPath+apiserver_name,
                     "cp " + testPath + apiserver_name + "/conf/apiserver.flags.template " + testPath + apiserver_name + "/conf/apiserver.flags",
