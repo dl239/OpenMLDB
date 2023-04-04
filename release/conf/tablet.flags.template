@@ -78,7 +78,7 @@
 #
 # table conf
 #--skiplist_max_height=12
-#--key_entry_max_height=8
+--key_entry_max_height=8
 
 # query conf
 # max table traverse iteration(full table scan/aggregation),default: 0
