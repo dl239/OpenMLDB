@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 @Threads(10)
 @Fork(value = 1, jvmArgs = {"-Xms8G", "-Xmx8G"})
 @Warmup(iterations = 1)
-@Measurement(iterations = 1, time = 60)
+@Measurement(iterations = 5, time = 60)
 
 public class OpenMLDBPerfBenchmark {
     private SqlExecutor executor;
@@ -135,6 +135,7 @@ public class OpenMLDBPerfBenchmark {
         String sql = Util.genScript(windowNum, windowSize, unionNum, joinNum);
         System.out.println(sql);
         Util.executeSQL("USE " + database + ";", executor);
+        Util.executeSQL("SET @@execute_mode='online';", executor);
         Util.executeSQL("DEPLOY " + deployName + " " + sql, executor);
     }
 
