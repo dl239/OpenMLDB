@@ -75,22 +75,27 @@ public class Util {
             builder.append("(");
         }
         builder.append("SELECT \n");
-        builder.append("col_s0,\n");
-        builder.append("concat(col_s1, col_d0) as concat_col_s1,\n");
+        int str_cnt = 12;
+        for (int i = 0; i < str_cnt; i++) {
+            builder.append("col_s" + Integer.toString(i) + ",\n");
+            builder.append("concat(col_s").append(i).append(", col_i0) as concat_col_s").append(i).append(", \n");
+            builder.append("concat(col_s").append(i).append(", col_d0) as concat_col_d").append(i).append(", \n");
+        }
+        //builder.append("concat(col_s1, col_d0) as concat_col_s1,\n");
         builder.append("upper(col_s2) as upper_col_s2,\n");
-        builder.append("substr(col_s3, 3) as substr_col_s3,\n");
+        //builder.append("substr(col_s3, 3) as substr_col_s3,\n");
         builder.append("year(col_t0) as year_col_t0,\n");
-        builder.append("string(col_i2) as str_col_i2,\n");
+        //builder.append("string(col_i2) as str_col_i2,\n");
         builder.append("add(col_i1, col_i3) as add_i1_i3,\n");
         for (int i = 0; i < windowNum; i++) {
-            builder.append("distinct_count(col_s1) OVER w").append(i).append(" AS distinct_count_w").append(i).append("_col_s1,\n");
+            //builder.append("distinct_count(col_s1) OVER w").append(i).append(" AS distinct_count_w").append(i).append("_col_s1,\n");
             builder.append("sum(col_i1) OVER w").append(i).append(" AS sum_w").append(i).append("_col_i1,\n");
             builder.append("count(col_s11) OVER w").append(i).append(" AS count_w").append(i).append("_col_s11,\n");
-            builder.append("avg(col_i4) OVER w").append(i).append(" AS avg_w").append(i).append("_col_i4,\n");
-            builder.append("case when !isnull(at(col_s5, 0)) OVER w").append(i).append(" then count(col_s5) OVER w").append(i)
-                    .append(" else null end AS case_when_count_w").append(i).append("_col_s5,\n");
-            builder.append("case when !isnull(at(col_i3, 0)) OVER w").append(i).append(" then count(col_i3) OVER w").append(i)
-                    .append(" else null end AS case_when_count_w").append(i).append("_col_i3,\n");
+            //builder.append("avg(col_i4) OVER w").append(i).append(" AS avg_w").append(i).append("_col_i4,\n");
+            //builder.append("case when !isnull(at(col_s5, 0)) OVER w").append(i).append(" then count(col_s5) OVER w").append(i)
+            //        .append(" else null end AS case_when_count_w").append(i).append("_col_s5,\n");
+            //builder.append("case when !isnull(at(col_i3, 0)) OVER w").append(i).append(" then count(col_i3) OVER w").append(i)
+            //        .append(" else null end AS case_when_count_w").append(i).append("_col_i3,\n");
         }
         builder.append(" from mt\n");
         builder.append("window ");
@@ -111,14 +116,22 @@ public class Util {
                 String table = "out" + String.valueOf(i + 1);
                 builder.append(" LAST JOIN\n");
                 builder.append("(SELECT \n");
-                builder.append(curTable).append(".col_s0 as ").append(table).append("_col_s0,\n");
-                builder.append("concat(").append(curTable).append(".col_s1, mt.col_d0) as ")
-                        .append(table).append("_concat_col_s1,\n");
+                for (int pos = 0; pos < str_cnt; pos++) {
+                    //builder.append("col_s" + Integer.toString(pos) + ",\n");
+                    builder.append(curTable).append(".col_s").append(pos).append(" as ").append(table).append("_col_s").append(pos).append(",\n");
+                    builder.append("concat(").append(curTable).append(".col_s").append(pos).append(", mt.col_d0) as ")
+                            .append(table).append("_concat_col_d").append(pos).append(",\n");
+                    builder.append("concat(").append(curTable).append(".col_s").append(pos).append(", mt.col_i0) as ")
+                            .append(table).append("_concat_col_i").append(pos).append(",\n");
+                }
+                //builder.append(curTable).append(".col_s0 as ").append(table).append("_col_s0,\n");
+                //builder.append("concat(").append(curTable).append(".col_s1, mt.col_d0) as ")
+                //        .append(table).append("_concat_col_s1,\n");
                 builder.append("upper(mt.col_s2) as ").append(table).append("_upper_col_s2,\n");
-                builder.append("substr(").append(curTable).append(".col_s3, 3) as ")
-                        .append(table).append("_substr_col_s3,\n");
+                //builder.append("substr(").append(curTable).append(".col_s3, 3) as ")
+                //        .append(table).append("_substr_col_s3,\n");
                 builder.append("year(mt.col_t0) as ").append(table).append("_year_col_t0,\n");
-                builder.append("string(").append(curTable).append(".col_i2) as ").append(table).append("_str_col_i2,\n");
+                //builder.append("string(").append(curTable).append(".col_i2) as ").append(table).append("_str_col_i2,\n");
                 builder.append("add(").append(curTable).append(".col_i1, mt.col_i3) as ")
                         .append(table).append("_add_i1_i3\n");
                 builder.append("from mt LAST JOIN ").append(curTable).append(" order by ")

@@ -33,8 +33,8 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 @Threads(10)
 @Fork(value = 1, jvmArgs = {"-Xms8G", "-Xmx8G"})
-@Warmup(iterations = 2)
-@Measurement(iterations = 5, time = 60)
+@Warmup(iterations = 1)
+@Measurement(iterations = 1, time = 60)
 
 public class OpenMLDBPerfBenchmark {
     private SqlExecutor executor;
@@ -197,6 +197,8 @@ public class OpenMLDBPerfBenchmark {
         benchmark.executeDeployment();
         benchmark.cleanEnv();*/
 
+        /*String sql = Util.genScript(4, 1000, 0, 4);
+        System.out.println(sql);*/
         try {
             Options opt = new OptionsBuilder()
                     .include(OpenMLDBPerfBenchmark.class.getSimpleName())
