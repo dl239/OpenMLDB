@@ -107,7 +107,7 @@ public class Util {
 
         }
         builder.append(" from mt\n");
-        builder.append("window w1 as (partition by col_s1 ")
+        builder.append("window w1 as (partition by col_s0 ")
                 .append(" order by col_t0 rows_range between 30d PRECEDING AND CURRENT ROW);");
         return builder.toString();
     }
