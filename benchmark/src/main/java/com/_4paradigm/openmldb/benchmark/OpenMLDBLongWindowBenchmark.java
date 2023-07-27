@@ -64,7 +64,7 @@ public class OpenMLDBLongWindowBenchmark {
     public void create () {
         Util.executeSQL("CREATE DATABASE IF NOT EXISTS " + database + ";", executor);
         Util.executeSQL("USE " + database + ";", executor);
-        String ddl = Util.genDDL("mt", 1);
+        String ddl = Util.genDDL("mt", 1, BenchmarkConfig.COL_NUM);
         Util.executeSQL(ddl, executor);
     }
 

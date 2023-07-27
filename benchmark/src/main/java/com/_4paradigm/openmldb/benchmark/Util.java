@@ -40,11 +40,12 @@ public class Util {
         return true;
     }
 
-    public static String genDDL(String name, int indexNum) {
-        int stringNum = 15;
-        int doubleNum= 5;
-        int timestampNum = 5;
-        int bigintNum = 5;
+    public static String genDDL(String name, int indexNum, int colNum) {
+        // 5:2:1:2
+        int stringNum = colNum / 2;
+        int doubleNum= colNum / 5;
+        int timestampNum = colNum / 10;
+        int bigintNum = colNum - stringNum - timestampNum - doubleNum;
         StringBuilder builder = new StringBuilder();
         builder.append("CREATE TABLE ").append(name).append(" (");
         builder.append("\n");
@@ -65,6 +66,49 @@ public class Util {
         }
         builder.delete(builder.length() - 1, builder.length() - 1);
         builder.append(") OPTIONS (REPLICANUM = 1);");
+        return builder.toString();
+    }
+
+    public static String genScript(int colNum) {
+        // simple project/udf/udaf/ 5:3:2
+        StringBuilder builder = new StringBuilder();
+        builder.append("SELECT \n");
+        int stringNum = colNum / 2;
+        int doubleNum= colNum / 5;
+        int timestampNum = colNum / 10;
+        int bigintNum = colNum - stringNum - timestampNum - doubleNum;
+        for (int i = 0; i < stringNum; i++) {
+            String colName = "col_s" + i;
+            builder.append(colName + ", \n");
+            if (i < stringNum / 5) {
+                builder.append("upper(" + colName + ") as upper_" + colName + ", \n");
+                builder.append("substr(" + colName + ", 3) as substr_" + colName + ", \n");
+            }
+        }
+        for (int i = 0; i < doubleNum; i++) {
+            String colName = "col_d" + i;
+            builder.append(colName + ", \n");
+            builder.append("floor(" + colName + ") as floor_" + colName + ", \n");
+        }
+        for (int i = 0; i < timestampNum; i++) {
+            String colName = "col_t" + i;
+            builder.append(colName + ", \n");
+            builder.append("year(" + colName + ") as year_" + colName + ", \n");
+        }
+        for (int i = 0; i < bigintNum; i++) {
+            String colName = "col_i" + i;
+            String nextColName = "col_i" + (i + 1);
+            builder.append(colName + ", \n");
+            if (i < bigintNum - 1) {
+                builder.append("add(" + colName + ", " + nextColName + ") as add_" + colName + "_next, \n");
+            }
+            builder.append("sum(" + colName + ") over w1 as sum_" + colName + ", \n");
+            builder.append("avg(" + colName + ") over w1 as avg_" + colName + ", \n");
+
+        }
+        builder.append(" from mt\n");
+        builder.append("window w1 as (partition by col_s1 ")
+                .append(" order by col_t0 rows_range between 30d PRECEDING AND CURRENT ROW);");
         return builder.toString();
     }
 

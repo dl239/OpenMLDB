@@ -43,6 +43,7 @@ public class OpenMLDBPerfBenchmark {
     private int windowNum;
     private int windowSize;
     private int joinNum;
+    private int colNum;
     private int unionNum = 0; // unspport in cluster mode in 0.5.0
     private Map<String, TableSchema> tableSchema = new HashMap<>();
     private Random random;
@@ -55,6 +56,7 @@ public class OpenMLDBPerfBenchmark {
         joinNum = BenchmarkConfig.JOIN_NUM;
         windowNum = BenchmarkConfig.WINDOW_NUM;
         windowSize = BenchmarkConfig.WINDOW_SIZE;
+        colNum = BenchmarkConfig.COL_NUM;
         random = new Random(System.currentTimeMillis());
         if (BenchmarkConfig.PK_MAX > 0) {
             for (int i = 0; i < BenchmarkConfig.PK_NUM; i++) {
@@ -80,16 +82,16 @@ public class OpenMLDBPerfBenchmark {
     public void create () {
         Util.executeSQL("CREATE DATABASE IF NOT EXISTS " + database + ";", executor);
         Util.executeSQL("USE " + database + ";", executor);
-        String ddl = Util.genDDL("mt", windowNum);
+        String ddl = Util.genDDL("mt", windowNum, colNum);
         Util.executeSQL(ddl, executor);
         for (int i = 0; i < unionNum; i++) {
             String tableName = "ut" + String.valueOf(i);
-            ddl = Util.genDDL(tableName, windowNum);
+            ddl = Util.genDDL(tableName, windowNum, colNum);
             Util.executeSQL(ddl, executor);
         }
         for (int i = 0; i < joinNum; i++) {
             String tableName = "lt" + String.valueOf(i);
-            ddl = Util.genDDL(tableName, 1);
+            ddl = Util.genDDL(tableName, 1, colNum);
             Util.executeSQL(ddl, executor);
         }
     }
@@ -132,8 +134,10 @@ public class OpenMLDBPerfBenchmark {
     }
 
     public void deploy() {
-        String sql = Util.genScript(windowNum, windowSize, unionNum, joinNum);
+        //String sql = Util.genScript(windowNum, windowSize, unionNum, joinNum);
+        String sql = Util.genScript(colNum);
         System.out.println(sql);
+        Util.executeSQL("set @@SESSION.execute_mode='online'", executor);
         Util.executeSQL("USE " + database + ";", executor);
         Util.executeSQL("DEPLOY " + deployName + " " + sql, executor);
     }
@@ -206,5 +210,6 @@ public class OpenMLDBPerfBenchmark {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
     }
 }

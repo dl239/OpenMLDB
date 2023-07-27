@@ -31,6 +31,7 @@ public class BenchmarkConfig {
     public static int WINDOW_SIZE = 1000;
     public static int JOIN_NUM = 2;
     public static int PK_BASE = 1000000;
+    public static int COL_NUM = 10;
     public static long TS_BASE = System.currentTimeMillis();
     public static String DEPLOY_NAME;
     public static String CSV_PATH;
@@ -54,6 +55,7 @@ public class BenchmarkConfig {
             JOIN_NUM = Integer.valueOf(prop.getProperty("JOIN_NUM"));
             PK_NUM = Integer.valueOf(prop.getProperty("PK_NUM", "100000"));
             PK_MAX = Integer.valueOf(prop.getProperty("PK_MAX", "0"));
+            COL_NUM = Integer.valueOf(prop.getProperty("COL_NUM", "30"));
             CSV_PATH = prop.getProperty("CSV_PATH");
 //            if(!CSV_PATH.startsWith("/")){
 //                CSV_PATH=Util.getRootPath()+CSV_PATH;
