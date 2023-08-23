@@ -60,11 +60,15 @@ jobs:
       image: ghcr.io/4paradigm/hybridsql:latest
     steps:
       - uses: actions/checkout@v2
-
+      - name: 'Get Previous tag'
+        id: previoustag
+        uses: "WyriHaximus/github-action-get-previous-tag@v1"
+        with:
+          fallback: 1.0.0
       - name: prepare env
         run: |
-          echo "Tag name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
-          echo "Tag name from github.ref_name: ${{  github.ref_name }}"
+          version=${{ steps.previoustag.outputs.tag }}
+          echo "version is ${version}"
           pip3 install requests openmldb pytest
       - name: install openmldb
         run: |
