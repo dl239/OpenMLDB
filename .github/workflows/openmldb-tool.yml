@@ -56,7 +56,6 @@ jobs:
 
   openmldb-tool-name:
     runs-on: ubuntu-latest
-    if: github.repository == '4paradigm/OpenMLDB'
     container:
       image: ghcr.io/4paradigm/hybridsql:latest
     steps:
@@ -64,6 +63,8 @@ jobs:
 
       - name: prepare env
         run: |
+          echo "Tag name from GITHUB_REF_NAME: $GITHUB_REF_NAME"
+          echo "Tag name from github.ref_name: ${{  github.ref_name }}"
           pip3 install requests openmldb pytest
       - name: install openmldb
         run: |
