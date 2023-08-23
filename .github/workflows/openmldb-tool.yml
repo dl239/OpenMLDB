@@ -67,6 +67,7 @@ jobs:
           fallback: 1.0.0
       - name: prepare env
         run: |
+          git fetch --tags
           hash=$(git rev-list --tags --max-count=1)
           echo "hash: ${hash}"
           version=$(git describe --always --tags `git rev-list --tags --max-count=1`)
