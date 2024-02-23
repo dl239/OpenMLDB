@@ -42,7 +42,7 @@ jobs:
       NPROC: 2
       BUILD_SHARED_LIBS: ON
       TESTING_ENABLE_STRIP: ON
-      THIRD_PARTY_DIR: ./
+      THIRD_PARTY_DIR: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,7 +70,7 @@ jobs:
       - name: install glog
         working-directory: glog
         run: |
-            cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=../
+            cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}
             cmake --build build
             cd build && make install
 
