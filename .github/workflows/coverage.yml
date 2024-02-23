@@ -70,7 +70,7 @@ jobs:
       - name: install glog
         working-directory: glog
         run: |
-            cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}
+            cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }}
             cmake --build build
             cmake --build build --target install
 
