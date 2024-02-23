@@ -60,6 +60,10 @@ jobs:
         run: |
           sudo make install
 
+      - name: coverage configure
+        run: |
+          make coverage-configure
+
       - name: download glog
         uses: actions/checkout@v4
         with:
@@ -73,10 +77,6 @@ jobs:
             cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }}
             cmake --build build
             cmake --build build --target install
-
-      - name: coverage configure
-        run: |
-          make coverage-configure
 
       - name: start service
         run: |
