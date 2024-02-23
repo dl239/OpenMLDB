@@ -70,9 +70,9 @@ jobs:
       - name: install glog
         working-directory: glog
         run: |
-            sudo cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=../
-            sudo cmake --build build
-            cd build && sudo make install
+            cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=../
+            cmake --build build
+            cd build && make install
 
       - name: coverage configure
         run: |
@@ -84,7 +84,7 @@ jobs:
       # make coverage-cpp will gen 16G build/ (no run), run test will take 2G more, so split make and test
       - name: Coverage CPP
         run: |
-          make coverage
+          make coverage-cpp
 
       - name: debug
         if: always()
