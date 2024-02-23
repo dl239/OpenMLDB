@@ -32,7 +32,7 @@ on:
 
 jobs:
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       CTEST_PARALLEL_LEVEL: 1 # parallel test level for ctest (make test)
       CMAKE_BUILD_TYPE: Debug
@@ -40,7 +40,7 @@ jobs:
       SQL_PYSDK_ENABLE: OFF
       SQL_JAVASDK_ENABLE: OFF
       NPROC: 2
-      BUILD_SHARED_LIBS: ON
+      BUILD_SHARED_LIBS: OFF
       TESTING_ENABLE_STRIP: ON
     steps:
       - uses: actions/checkout@v4
