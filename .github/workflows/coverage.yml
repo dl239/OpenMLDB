@@ -70,8 +70,8 @@ jobs:
       - name: install glog
         working-directory: glog
         run: |
-            sudo cmake -S . -B build -G "Unix Makefiles"
-            sudo cmake -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }} --build build
+            sudo cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }}
+            sudo cmake --build build
             cd build && sudo make install
 
       - name: coverage configure
