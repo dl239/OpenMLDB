@@ -42,6 +42,7 @@ jobs:
       NPROC: 2
       BUILD_SHARED_LIBS: ON
       TESTING_ENABLE_STRIP: ON
+      THIRD_PARTY_DIR: /tmp/
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,7 +71,7 @@ jobs:
         working-directory: glog
         run: |
             sudo cmake -S . -B build -G "Unix Makefiles"
-            sudo cmake --build build
+            sudo cmake --build build -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }}
             cd build && sudo make install
 
       - name: coverage configure
