@@ -72,7 +72,7 @@ jobs:
         run: |
             cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}
             cmake --build build
-            cd build && make install
+            cmake --build build --target install
 
       - name: coverage configure
         run: |
