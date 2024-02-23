@@ -71,7 +71,7 @@ jobs:
         working-directory: glog
         run: |
             sudo cmake -S . -B build -G "Unix Makefiles"
-            sudo cmake --build build -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }}
+            sudo cmake -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }} --build build
             cd build && sudo make install
 
       - name: coverage configure
