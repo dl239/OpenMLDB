@@ -71,7 +71,7 @@ jobs:
         run: |
             sudo cmake -S . -B build -G "Unix Makefiles"
             sudo cmake --build build
-            sudo cmake --build install
+            cd build && sudo make install
 
       - name: coverage configure
         run: |
