@@ -42,7 +42,7 @@ jobs:
       NPROC: 2
       BUILD_SHARED_LIBS: ON
       TESTING_ENABLE_STRIP: ON
-      THIRD_PARTY_DIR: /tmp/
+      THIRD_PARTY_DIR: ./
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,7 +70,7 @@ jobs:
       - name: install glog
         working-directory: glog
         run: |
-            sudo cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=${{ env.THIRD_PARTY_DIR }}
+            sudo cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=../
             sudo cmake --build build
             cd build && sudo make install
 
