@@ -1055,6 +1055,16 @@ std::shared_ptr<::openmldb::client::TabletClient> SQLClusterRouter::GetTabletCli
 std::shared_ptr<::openmldb::client::TabletClient> SQLClusterRouter::GetTabletClientForBatchQuery(
     const std::string& db, const std::string& sql, const std::shared_ptr<SQLRequestRow>& parameter,
     hybridse::sdk::Status* status) {
+
+    auto tablet_accessor = cluster_sdk_->GetTablet();
+    if (tablet_accessor) {
+        *status = {};
+        return tablet_accessor->GetClient();
+    } else {
+        SET_STATUS_AND_WARN(status, StatusCode::kRuntimeError, "random tablet accessor is null");
+        return {};
+    }
+
     RET_IF_NULL_AND_WARN(status, "output status is nullptr");
     auto cache = GetSQLCache(db, sql, hybridse::vm::kBatchMode, parameter, status);
     WARN_NOT_OK_AND_RET(status, "sql plan failed(get/create cache failed)", nullptr);
