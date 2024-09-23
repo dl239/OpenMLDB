@@ -2963,7 +2963,7 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
         // go abnormal during rewrite phase.
         auto s = hybridse::rewriter::Rewrite(sql);
         if (s.ok()) {
-            LOG(INFO) << "rewrited: " << s.value();
+            DLOG(INFO) << "rewrited: " << s.value();
             sql = s.value();
         } else {
             LOG(WARNING) << s.status();

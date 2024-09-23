@@ -453,7 +453,8 @@ class SQLClusterRouter : public SQLRouter {
     bool is_cluster_mode_;
     InteractiveValidator interactive_validator_;
     DBSDK* cluster_sdk_;
-    std::map<std::string, std::map<hybridse::vm::EngineMode, base::lru_cache<std::string, std::shared_ptr<SQLCache>>>>
+    absl::flat_hash_map<std::string, absl::flat_hash_map<hybridse::vm::EngineMode,
+                                                         base::lru_cache<std::string, std::shared_ptr<SQLCache>>>>
         input_lru_cache_;
     mutable ::openmldb::base::SpinMutex mu_;
     ::openmldb::base::Random rand_;

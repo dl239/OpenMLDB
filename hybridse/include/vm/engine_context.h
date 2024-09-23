@@ -88,9 +88,9 @@ class CompileInfo {
 ///     - DB name
 ///       - SQL string
 ///           - CompileInfo
-typedef std::map<EngineMode,
-                std::map<std::string,
-                    boost::compute::detail::lru_cache<std::string, std::shared_ptr<CompileInfo>>>>
+typedef absl::flat_hash_map<
+    EngineMode,
+    absl::flat_hash_map<std::string, boost::compute::detail::lru_cache<std::string, std::shared_ptr<CompileInfo>>>>
     EngineLRUCache;
 
 class CompileInfoCache {

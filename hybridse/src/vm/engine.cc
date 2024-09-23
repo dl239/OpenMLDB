@@ -50,7 +50,7 @@ EngineOptions::EngineOptions()
       enable_expr_optimize_(true),
       enable_batch_window_parallelization_(false),
       enable_window_column_pruning_(false),
-      max_sql_cache_size_(50) {
+      max_sql_cache_size_(1100) {
 }
 
 static absl::Status ExtractRows(const node::ExprNode* expr, const codec::Schema* sc, std::vector<codec::Row>* out)
@@ -372,7 +372,7 @@ bool Engine::SetCacheLocked(const std::string& db, const std::string& sql, Engin
 
     auto& mode_cache = lru_cache_[engine_mode];
     using BoostLRU = boost::compute::detail::lru_cache<std::string, std::shared_ptr<CompileInfo>>;
-    std::map<std::string, BoostLRU>::iterator db_iter = mode_cache.find(db);
+    auto db_iter = mode_cache.find(db);
     if (db_iter == mode_cache.end()) {
         db_iter = mode_cache.insert(db_iter, {db, BoostLRU(options_.GetMaxSqlCacheSize())});
     }

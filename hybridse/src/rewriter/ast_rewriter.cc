@@ -509,10 +509,6 @@ class RequestQueryRewriteUnparser : public zetasql::parser::Unparser {
             }
         }
 
-        LOG(INFO) << "label expr 0: " << label_expr_0->SingleNodeDebugString();
-        LOG(INFO) << "label expr 1: " << label_expr_1->SingleNodeDebugString();
-        LOG(INFO) << "filter expr: " << filter_expr->SingleNodeDebugString();
-
         if (has_label_col_0 && has_label_col_1 &&
             label_expr_0->SingleNodeDebugString() != label_expr_1->SingleNodeDebugString() &&
             label_expr_0->SingleNodeDebugString() == filter_expr->SingleNodeDebugString()) {
