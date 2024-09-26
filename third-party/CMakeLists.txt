@@ -57,8 +57,8 @@ option(BUILD_BUNDLED_LLVM "Build llvm from source" ${BUILD_BUNDLED})
 option(BUILD_BUNDLED_COMMON "Build baidu common from source" ${BUILD_BUNDLED})
 option(BUILD_BUNDLED_ROCKSDB "Build rocksdb from source" ${BUILD_BUNDLED})
 
-if (CMAKE_BUILD_TYPE STREQUAL "")
-  set(CMAKE_BUILD_TYPE Release)
+if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif ()
 
 message (STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")

@@ -203,6 +203,9 @@ if(SQL_JAVASDK_ENABLE)
     # this target ensure cpp compiled libraries were copied into java project:
     # 1. cp sql_jsdk into openmldb-native
     # 2. cp hybridse jsdk into hybridse-native (inside dependency cp_hybridse_native_so)
+    if (TESTING_ENABLE_STRIP)
+        strip_exe(sql_jsdk)
+    endif()
     add_custom_target(cp_native_so ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_SOURCE_DIR}/java/openmldb-native/src/main/resources
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sql_jsdk> ${PROJECT_SOURCE_DIR}/java/openmldb-native/src/main/resources/

@@ -52,6 +52,9 @@ if(SQL_JAVASDK_ENABLE)
   target_include_directories(hybridse_jsdk_core PRIVATE ${JNI_INCLUDE_DIRS})
   target_compile_options(hybridse_jsdk_core PRIVATE -w)
   target_link_libraries(hybridse_jsdk_core PRIVATE ${GLOG_LIBRARY} ${sdk_core_deps_libs})
+  if (TESTING_ENABLE_STRIP)
+    strip_exe(hybridse_jsdk_core)
+  endif()
 
   if(APPLE)
     set_target_properties(hybridse_jsdk_core PROPERTIES
