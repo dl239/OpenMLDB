@@ -1193,8 +1193,14 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQLRequest(co
     auto rs = ResultSetSQL::MakeResultSet(response, cntl, status);
     return rs;
 }
+std::shared_ptr<::hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQLParameterized(
+    const std::string& db, const std::string& sql, std::shared_ptr<openmldb::sdk::SQLRequestRow> parameter,
+    ::hybridse::sdk::Status* status) {
+    return ExecuteSQLParameterized(GetDefaultEngineMode(), db, sql, parameter, status);
+}
 
 std::shared_ptr<::hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQLParameterized(
+    ::hybridse::vm::EngineMode m,
     const std::string& db, const std::string& sql, std::shared_ptr<openmldb::sdk::SQLRequestRow> parameter,
     ::hybridse::sdk::Status* status) {
     RET_IF_NULL_AND_WARN(status, "output status is nullptr");
@@ -1212,7 +1218,7 @@ std::shared_ptr<::hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQLParamete
     cntl->set_timeout_ms(options_->request_timeout);
     DLOG(INFO) << "send query to tablet " << client->GetEndpoint();
     auto response = std::make_shared<::openmldb::api::QueryResponse>();
-    if (!client->Query(db, sql, GetDefaultEngineMode(), parameter_types, parameter ? parameter->GetRow() : "",
+    if (!client->Query(db, sql, m, parameter_types, parameter ? parameter->GetRow() : "",
                        cntl.get(), response.get(), options_->enable_debug)) {
         // rpc error is in cntl or response
         RPC_STATUS_AND_WARN(status, cntl, response, "Query rpc failed");
@@ -2961,7 +2967,6 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
     status->SetOK();
 
     std::string sql = str;
-    hybridse::vm::SqlContext ctx;
     if (ANSISQLRewriterEnabled()) {
         // If true, enable the ANSI SQL rewriter that would rewrite some SQL query
         // for pre-defined pattern to OpenMLDB SQL extensions. Rewrite phase is before general SQL compilation.
@@ -2979,6 +2984,8 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
             LOG(WARNING) << s.status();
         }
     }
+    hybridse::vm::SqlContext ctx;
+    ctx.engine_mode = GetDefaultEngineMode();
     ctx.sql = sql;
 
     auto sql_status = hybridse::plan::PlanAPI::CreatePlanTreeFromScript(&ctx);
@@ -3184,12 +3191,10 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
         }
         case hybridse::node::kPlanTypeFuncDef:
         case hybridse::node::kPlanTypeQuery: {
-            ::hybridse::vm::EngineMode default_mode = GetDefaultEngineMode();
-            // execute_mode in query config clause takes precedence
-            auto mode = ::hybridse::vm::Engine::TryDetermineEngineMode(sql, default_mode);
+            auto mode = ctx.engine_mode;
             if (mode != ::hybridse::vm::EngineMode::kOffline) {
                 // Run online query
-                return ExecuteSQLParameterized(db, sql, parameter, status);
+                return ExecuteSQLParameterized(mode, db, sql, parameter, status);
             } else {
                 // Run offline query
                 return ExecuteOfflineQuery(db, sql, is_sync_job, offline_job_timeout, status);

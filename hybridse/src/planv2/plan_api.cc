@@ -26,7 +26,11 @@
 namespace hybridse {
 namespace plan {
 
+#define EXECUTE_MODE_OPT "execute_mode"
+#define VALUES_OPT "values"
+
 base::Status PlanAPI::CreatePlanTreeFromScript(vm::SqlContext *ctx) {
+    // 1. parse ast node
     zetasql::ParserOptions parser_opts;
     zetasql::LanguageOptions language_opts;
     language_opts.EnableLanguageFeature(zetasql::FEATURE_V_1_3_COLUMN_DEFAULT_VALUE);
@@ -43,6 +47,13 @@ base::Status PlanAPI::CreatePlanTreeFromScript(vm::SqlContext *ctx) {
 
     DLOG(INFO) << "AST Node:\n" << ctx->ast_node->script()->DebugString();
 
+    // 2. update engine mode
+    for (auto stmt : ctx->ast_node->script()->statement_list()) {
+        ctx->engine_mode = plan::DetermineEngineMode(stmt, ctx->engine_mode);
+        break;
+    }
+
+    // 3. ast node -> plan node
     const zetasql::ASTScript *script = ctx->ast_node->script();
     auto planner_ptr =
         std::make_unique<SimplePlannerV2>(&ctx->nm, ctx->engine_mode == vm::kBatchMode, ctx->is_cluster_optimized,
@@ -140,6 +151,42 @@ absl::StatusOr<codec::Schema> ParseTableColumSchema(absl::string_view str) {
     }
 
     return create->GetColumnDefListAsSchema();
+}
+
+::hybridse::vm::EngineMode DetermineEngineMode(const zetasql::ASTStatement *stmt,
+                                               ::hybridse::vm::EngineMode default_mode) {
+    vm::EngineMode mode = default_mode;
+    if (stmt &&
+        stmt->node_kind() == zetasql::AST_QUERY_STATEMENT ) {
+        auto query = stmt->GetAsOrNull<zetasql::ASTQueryStatement>();
+        if (query && query->config_clause()) {
+            auto options = query->config_clause()->options_list()->options_entries();
+            bool values_arr_size_gt_1 = false;
+            for (auto kv : options) {
+                auto name = kv->name()->GetAsStringView();
+                if (absl::EqualsIgnoreCase(name, EXECUTE_MODE_OPT)) {
+                    auto val = kv->value()->GetAsOrNull<zetasql::ASTStringLiteral>();
+                    if (val) {
+                        auto m = vm::UnparseEngineMode(val->string_value());
+                        mode = m.value_or(default_mode);
+                    }
+                }
+
+                if (absl::EqualsIgnoreCase(name, VALUES_OPT)) {
+                    auto arr_expr = kv->value()->GetAsOrNull<zetasql::ASTArrayConstructor>();
+                    if (arr_expr) {
+                        values_arr_size_gt_1 = arr_expr->elements().size() > 1;
+                    }
+                }
+            }
+
+            if (mode == vm::kRequestMode && values_arr_size_gt_1) {
+                mode = vm::kBatchRequestMode;
+            }
+        }
+    }
+
+    return mode;
 }
 
 }  // namespace plan

@@ -135,6 +135,20 @@ static const uint32_t SEED = 0xe17a1465;
 
 static constexpr const char DEPLOY_STATS[] = "deploy_stats";
 
+static inline absl::StatusOr<hybridse::vm::EngineMode> toEM(::openmldb::api::EngineMode m) {
+    switch (m) {
+        case ::openmldb::api::EngineMode::kBatch:
+            return hybridse::vm::EngineMode::kBatchMode;
+        case ::openmldb::api::EngineMode::kRequest:
+            return hybridse::vm::EngineMode::kRequestMode;
+        case ::openmldb::api::EngineMode::kBatch_request:
+            return hybridse::vm::EngineMode::kBatchRequestMode;
+        default:
+            break;
+    }
+    return absl::UnimplementedError("offline mode not supported on tablet");
+}
+
 TabletImpl::TabletImpl()
     : tables_(),
       mu_(),
@@ -1734,9 +1748,19 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
         }
     };
 
-    hybridse::vm::EngineMode default_mode =
+    hybridse::vm::EngineMode mode =
         request->is_batch() ? hybridse::vm::EngineMode::kBatchMode : hybridse::vm::EngineMode::kRequestMode;
-    auto mode = hybridse::vm::Engine::TryDetermineEngineMode(request->sql(), default_mode);
+    if (request->has_engine_mode()) {
+        // new option
+        auto s = toEM(request->engine_mode());
+        if (!s.ok()) {
+            SET_RESP_AND_WARN(response, base::ReturnCode::kInvalidParameter, s.status().ToString());
+            return;
+        }
+        mode = s.value();
+    } else {
+        mode = hybridse::vm::Engine::TryDetermineEngineMode(request->sql(), mode);
+    }
 
     ::hybridse::base::Status status;
     switch (mode) {

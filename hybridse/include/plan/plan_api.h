@@ -23,6 +23,10 @@
 #include "node/node_manager.h"
 #include "vm/sql_ctx.h"
 
+namespace zetasql {
+class ASTStatement;
+}
+
 namespace hybridse {
 namespace plan {
 
@@ -68,6 +72,8 @@ absl::StatusOr<node::TypeNode*> ParseType(absl::string_view, NodeManager*);
 // - table_constraint_definition
 // while this method extract table_column_definition only
 absl::StatusOr<codec::Schema> ParseTableColumSchema(absl::string_view str);
+
+::hybridse::vm::EngineMode DetermineEngineMode(const zetasql::ASTStatement*, ::hybridse::vm::EngineMode);
 }  // namespace plan
 }  // namespace hybridse
 #endif  // HYBRIDSE_INCLUDE_PLAN_PLAN_API_H_

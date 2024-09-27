@@ -35,8 +35,6 @@
 #include "zetasql/parser/parser.h"
 
 DECLARE_bool(enable_spark_unsaferow_format);
-#define EXECUTE_MODE_OPT "execute_mode"
-#define VALUES_OPT "values"
 
 namespace hybridse {
 namespace vm {
@@ -655,38 +653,7 @@ EngineMode Engine::TryDetermineEngineMode(absl::string_view sql, EngineMode defa
         return default_mode;
     }
 
-    EngineMode mode = default_mode;
-    if (ast->statement() &&
-        ast->statement()->node_kind() == zetasql::AST_QUERY_STATEMENT ) {
-        auto query = ast->statement()->GetAsOrNull<zetasql::ASTQueryStatement>();
-        if (query && query->config_clause()) {
-            auto options = query->config_clause()->options_list()->options_entries();
-            bool values_arr_size_gt_1 = false;
-            for (auto kv : options) {
-                auto name = kv->name()->GetAsStringView();
-                if (absl::EqualsIgnoreCase(name, EXECUTE_MODE_OPT)) {
-                    auto val = kv->value()->GetAsOrNull<zetasql::ASTStringLiteral>();
-                    if (val) {
-                        auto m = UnparseEngineMode(val->string_value());
-                        mode = m.value_or(default_mode);
-                    }
-                }
-
-                if (absl::EqualsIgnoreCase(name, VALUES_OPT)) {
-                    auto arr_expr = kv->value()->GetAsOrNull<zetasql::ASTArrayConstructor>();
-                    if (arr_expr) {
-                        values_arr_size_gt_1 = arr_expr->elements().size() > 1;
-                    }
-                }
-            }
-
-            if (mode == vm::kRequestMode && values_arr_size_gt_1) {
-                mode = kBatchRequestMode;
-            }
-        }
-    }
-
-    return mode;
+    return ::hybridse::plan::DetermineEngineMode(ast->statement(), default_mode);
 }
 }  // namespace vm
 }  // namespace hybridse

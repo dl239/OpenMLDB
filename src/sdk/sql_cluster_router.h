@@ -138,6 +138,11 @@ class SQLClusterRouter : public SQLRouter {
                                                                       std::shared_ptr<SQLRequestRow> parameter,
                                                                       ::hybridse::sdk::Status* status) override;
 
+    std::shared_ptr<hybridse::sdk::ResultSet> ExecuteSQLParameterized(::hybridse::vm::EngineMode, const std::string& db,
+                                                                      const std::string& sql,
+                                                                      std::shared_ptr<SQLRequestRow> parameter,
+                                                                      ::hybridse::sdk::Status* status);
+
     std::shared_ptr<hybridse::sdk::ResultSet> ExecuteSQLBatchRequest(const std::string& db, const std::string& sql,
                                                                      std::shared_ptr<SQLRequestRowBatch> row_batch,
                                                                      ::hybridse::sdk::Status* status) override;

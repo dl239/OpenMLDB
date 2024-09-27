@@ -36,6 +36,22 @@ DECLARE_uint32(absolute_ttl_max);
 namespace openmldb {
 namespace client {
 
+static inline openmldb::api::EngineMode fromEM(::hybridse::vm::EngineMode m) {
+    switch (m) {
+        case hybridse::vm::EngineMode::kBatchMode:
+            return ::openmldb::api::EngineMode::kBatch;
+        case hybridse::vm::EngineMode::kRequestMode:
+            return ::openmldb::api::EngineMode::kRequest;
+        case hybridse::vm::EngineMode::kBatchRequestMode:
+            return ::openmldb::api::EngineMode::kBatch_request;
+        case hybridse::vm::EngineMode::kOffline:
+            return ::openmldb::api::EngineMode::kOffline;
+        default:
+            break;
+    }
+    return ::openmldb::api::EngineMode::kBatch;
+}
+
 TabletClient::TabletClient(const std::string& endpoint, const std::string& real_endpoint,
                            const openmldb::authn::AuthToken auth_token)
     : Client(endpoint, real_endpoint), client_(real_endpoint.empty() ? endpoint : real_endpoint, auth_token) {}
@@ -82,6 +98,7 @@ bool TabletClient::Query(const std::string& db, const std::string& sql,
     request.set_sql(sql);
     request.set_db(db);
     request.set_is_batch(default_mode == hybridse::vm::kBatchMode);
+    request.set_engine_mode(fromEM(default_mode));
     request.set_is_debug(is_debug);
     request.set_parameter_row_size(parameter_row.size());
     request.set_parameter_row_slices(1);

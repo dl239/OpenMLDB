@@ -676,6 +676,13 @@ message UpdateRealEndpointMapRequest {
     repeated RealEndpointPair real_endpoint_map = 1; 
 }
 
+enum EngineMode {
+    kBatch = 1;
+    kRequest = 2;
+    kBatch_request = 3;
+    kOffline = 4;
+}
+
 message QueryRequest {
     optional string sql = 1;
     optional string db = 2;
@@ -689,6 +696,7 @@ message QueryRequest {
     optional uint32 parameter_row_size = 10;
     optional uint32 parameter_row_slices = 11;
     repeated openmldb.type.DataType parameter_types = 12;
+    optional EngineMode engine_mode = 13;
 }
 
 message QueryResponse {
