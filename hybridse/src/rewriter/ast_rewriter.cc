@@ -330,6 +330,10 @@ class RequestQueryRewriteUnparser : public zetasql::parser::Unparser {
     RequestQueryRewriteUnparser(const RequestQueryRewriteUnparser&) = delete;
     RequestQueryRewriteUnparser& operator=(const RequestQueryRewriteUnparser&) = delete;
 
+    vm::EngineMode engine_mode(vm::EngineMode fallback) const {
+        return mode.value_or(fallback);
+    }
+
     void visitASTSelect(const zetasql::ASTSelect* node, void* data) override {
         while (true) {
             if (outer_most_select_ != nullptr) {
@@ -458,6 +462,10 @@ class RequestQueryRewriteUnparser : public zetasql::parser::Unparser {
     }
 
     void constSelectListAsConfigClause(const std::vector<const zetasql::ASTExpression*>& selects, void* data) {
+        if (!mode.has_value()) {
+            mode.emplace(vm::EngineMode::kRequestMode);
+        }
+
         print("CONFIG (execute_mode = 'request', values = (");
         for (int i = 0; i < selects.size(); ++i) {
             selects.at(i)->Accept(this, data);
@@ -527,21 +535,27 @@ class RequestQueryRewriteUnparser : public zetasql::parser::Unparser {
     const zetasql::ASTWhereClause* filter_clause_;
 
     std::vector<const zetasql::ASTExpression*> list_;
+
+    std::optional<vm::EngineMode> mode;
 };
 
 absl::StatusOr<std::string> Rewrite(absl::string_view query) {
-    auto str = std::string(query);
-    {
-        std::unique_ptr<zetasql::ParserOutput> ast;
-        auto s = hybridse::plan::ParseStatement(str, &ast);
-        if (!s.ok()) {
-            return s;
-        }
+    std::unique_ptr<zetasql::ParserOutput> ast;
+    auto s = hybridse::plan::ParseStatement(query, &ast);
+    if (!s.ok()) {
+        return s;
+    }
 
-        if (ast->statement() && ast->statement()->node_kind() == zetasql::AST_QUERY_STATEMENT) {
+    return Rewrite(ast->statement(), query, nullptr);
+}
+
+absl::StatusOr<std::string> Rewrite(const zetasql::ASTStatement* stmt, absl::string_view query, vm::EngineMode* mode) {
+    std::string str = std::string(query);
+    {
+        if (stmt && stmt->node_kind() == zetasql::AST_QUERY_STATEMENT) {
             std::string unparsed_;
             LastJoinRewriteUnparser unparser(&unparsed_);
-            ast->statement()->Accept(&unparser, nullptr);
+            stmt->Accept(&unparser, nullptr);
             unparser.FlushLine();
             str = unparsed_;
         }
@@ -559,6 +573,9 @@ absl::StatusOr<std::string> Rewrite(absl::string_view query) {
             ast->statement()->Accept(&unparser, nullptr);
             unparser.FlushLine();
             str = unparsed_;
+            if (mode) {
+                *mode = unparser.engine_mode(*mode);
+            }
         }
     }
 

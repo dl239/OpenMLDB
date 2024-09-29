@@ -20,11 +20,15 @@
 #include <string>
 
 #include "absl/status/statusor.h"
+#include "vm/engine_context.h"
+#include "zetasql/parser/parser.h"
 
 namespace hybridse {
+
 namespace rewriter {
 
 absl::StatusOr<std::string> Rewrite(absl::string_view query);
+absl::StatusOr<std::string> Rewrite(const zetasql::ASTStatement* stmt, absl::string_view query, vm::EngineMode* mode);
 
 }  // namespace rewriter
 }  // namespace hybridse

@@ -2967,7 +2967,15 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
     status->SetOK();
 
     std::string sql = str;
+    bool is_query = false;
     if (ANSISQLRewriterEnabled()) {
+        std::unique_ptr<zetasql::ParserOutput> ast;
+        auto s0 = hybridse::plan::ParseStatement(str, &ast);
+        if (!s0.ok()) {
+            SET_STATUS_AND_WARN(status, StatusCode::kPlanError, s0.ToString());
+            return {};
+        }
+        is_query = ast->statement()->node_kind() == zetasql::AST_QUERY_STATEMENT;
         // If true, enable the ANSI SQL rewriter that would rewrite some SQL query
         // for pre-defined pattern to OpenMLDB SQL extensions. Rewrite phase is before general SQL compilation.
         //
@@ -2976,14 +2984,26 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
         //
         // Rewrite rules are based on ASTNode, possibly lack some semantic checks. Turn it off if things
         // go abnormal during rewrite phase.
-        auto s = hybridse::rewriter::Rewrite(sql);
-        if (s.ok()) {
-            DLOG(INFO) << "rewrited: " << s.value();
-            sql = s.value();
-        } else {
-            LOG(WARNING) << s.status();
+        if (is_query) {
+            auto mode = GetDefaultEngineMode();
+            auto s = hybridse::rewriter::Rewrite(ast->statement(), str, &mode);
+            if (s.ok()) {
+                DLOG(INFO) << "rewrited: " << s.value();
+                sql = s.value();
+            } else {
+                LOG(WARNING) << s.status();
+            }
+            // mode = hybridse::plan::DetermineEngineMode(ast->statement(), mode);
+            if (mode != ::hybridse::vm::EngineMode::kOffline) {
+                // Run online query
+                return ExecuteSQLParameterized(mode, db, sql, parameter, status);
+            } else {
+                // Run offline query
+                return ExecuteOfflineQuery(db, sql, is_sync_job, offline_job_timeout, status);
+            }
         }
     }
+
     hybridse::vm::SqlContext ctx;
     ctx.engine_mode = GetDefaultEngineMode();
     ctx.sql = sql;
