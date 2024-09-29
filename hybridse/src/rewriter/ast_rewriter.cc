@@ -194,6 +194,7 @@ class LastJoinRewriteUnparser : public zetasql::parser::Unparser {
                 }
 
                 // rewrite
+                rewritten_ = true;
                 {
                     opt_out_window_ = inner_select->window_clause();
                     opt_out_where_ = node->where_clause();
@@ -310,12 +311,17 @@ class LastJoinRewriteUnparser : public zetasql::parser::Unparser {
         zetasql::parser::Unparser::visitASTWhereClause(node, data);
     }
 
+    // does rewrite rule actually happen ?
+    bool rewritten() const { return rewritten_; }
+
  private:
     const zetasql::ASTWindowClause* opt_out_window_ = nullptr;
     const zetasql::ASTWhereClause* opt_out_where_ = nullptr;
     const zetasql::ASTSelectColumn* opt_out_row_number_col_ = nullptr;
     const zetasql::ASTJoin* opt_join_ = nullptr;
     const zetasql::ASTPathExpression* opt_in_last_join_order_by_ = nullptr;
+
+    bool rewritten_ = false;
 };
 
 // SELECT:
@@ -551,26 +557,32 @@ absl::StatusOr<std::string> Rewrite(absl::string_view query) {
 
 absl::StatusOr<std::string> Rewrite(const zetasql::ASTStatement* stmt, absl::string_view query, vm::EngineMode* mode) {
     std::string str = std::string(query);
+    std::unique_ptr<zetasql::ParserOutput> ast;
     {
         if (stmt && stmt->node_kind() == zetasql::AST_QUERY_STATEMENT) {
             std::string unparsed_;
             LastJoinRewriteUnparser unparser(&unparsed_);
             stmt->Accept(&unparser, nullptr);
-            unparser.FlushLine();
-            str = unparsed_;
+
+            if (!unparser.rewritten()) {
+                // rule not applied, reuse stmt
+            } else {
+                // parse to ast again
+                unparser.FlushLine();
+                str = unparsed_;
+                auto s = hybridse::plan::ParseStatement(str, &ast);
+                if (!s.ok()) {
+                    return s;
+                }
+                stmt = ast->statement();
+            }
         }
     }
     {
-        std::unique_ptr<zetasql::ParserOutput> ast;
-        auto s = hybridse::plan::ParseStatement(str, &ast);
-        if (!s.ok()) {
-            return s;
-        }
-
-        if (ast->statement() && ast->statement()->node_kind() == zetasql::AST_QUERY_STATEMENT) {
+        if (stmt && stmt->node_kind() == zetasql::AST_QUERY_STATEMENT) {
             std::string unparsed_;
             RequestQueryRewriteUnparser unparser(&unparsed_);
-            ast->statement()->Accept(&unparser, nullptr);
+            stmt->Accept(&unparser, nullptr);
             unparser.FlushLine();
             str = unparsed_;
             if (mode) {
