@@ -135,7 +135,7 @@ static const uint32_t SEED = 0xe17a1465;
 
 static constexpr const char DEPLOY_STATS[] = "deploy_stats";
 
-static inline absl::StatusOr<hybridse::vm::EngineMode> toEM(::openmldb::api::EngineMode m) {
+inline absl::StatusOr<hybridse::vm::EngineMode> toEM(::openmldb::api::EngineMode m) {
     switch (m) {
         case ::openmldb::api::EngineMode::kBatch:
             return hybridse::vm::EngineMode::kBatchMode;

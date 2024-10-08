@@ -520,6 +520,7 @@ std::shared_ptr<TabletAccessor> ClientManager::GetTablet(const std::string& name
 std::shared_ptr<TabletAccessor> ClientManager::GetTablet() const {
     std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
     if (clients_.empty()) {
+        LOG(WARNING) << "empty client list";
         return std::shared_ptr<TabletAccessor>();
     }
     uint32_t seq = rand_.Uniform(clients_.size());
@@ -547,7 +548,7 @@ std::vector<std::shared_ptr<TabletAccessor>> ClientManager::GetAllTablet() const
 
 bool ClientManager::UpdateClient(const std::map<std::string, std::string>& endpoint_map) {
     if (endpoint_map.empty()) {
-        DLOG(INFO) << "endpoint_map is empty";
+        LOG(INFO) << "endpoint_map is empty";
         return true;
     }
     std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);

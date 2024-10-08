@@ -243,7 +243,10 @@ bool ClusterSDK::Init() {
     engine_ = new ::hybridse::vm::Engine(catalog_, eopt);
 
     ok = BuildCatalog();
-    if (!ok) return false;
+    if (!ok) {
+        LOG(ERROR) << "build catalog failed";
+        return false;
+    }
     CheckZk();
     if (!InitExternalFun()) {
         return false;
@@ -415,12 +418,13 @@ bool ClusterSDK::InitTabletClient() {
         real_ep_map.emplace(cur_endpoint, real_endpoint);
     }
     // TODO(hw): update won't delete the old clients in mgr, should create a new mgr?
-    client_manager_->UpdateClient(real_ep_map);
-    return true;
+    return client_manager_->UpdateClient(real_ep_map);
+    // return true;
 }
 
 bool ClusterSDK::BuildCatalog() {
     if (!InitTabletClient()) {
+        LOG(ERROR) << "init tablet client failed";
         return false;
     }
 
