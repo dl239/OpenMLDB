@@ -55,7 +55,9 @@ HybridSeJit::HybridSeJit(::llvm::orc::LLJITBuilderState& s, ::llvm::Error& e)
     : LLJIT(s, e) {}
 HybridSeJit::~HybridSeJit() {}
 
-HybridSeLlvmJitWrapper::HybridSeLlvmJitWrapper(const JitOptions& options) : jit_options_(options) {}
+HybridSeLlvmJitWrapper::HybridSeLlvmJitWrapper(const JitOptions& options) : jit_options_(options) {
+    LOG(INFO) << "creating new jit instance: " << this;
+}
 
 static void RunDefaultOptPasses(::llvm::Module* m) {
     ::llvm::legacy::FunctionPassManager fpm(m);

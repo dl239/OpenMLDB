@@ -58,7 +58,7 @@ struct SqlContext {
     // TODO(wangtaize) add a light jit engine
     // eg using bthead to compile ir
     hybridse::vm::JitOptions jit_options;
-    std::shared_ptr<hybridse::vm::HybridSeJitWrapper> jit = nullptr;
+    hybridse::vm::HybridSeJitWrapper* jit = nullptr;
     Schema schema;
     Schema request_schema;
     std::string request_db_name;

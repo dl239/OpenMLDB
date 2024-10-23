@@ -86,7 +86,7 @@ std::string LlvmToString(const T& value) {
 class HybridSeLlvmJitWrapper : public HybridSeJitWrapper {
  public:
     explicit HybridSeLlvmJitWrapper(const JitOptions& options = {});
-    ~HybridSeLlvmJitWrapper() override {}
+    ~HybridSeLlvmJitWrapper() override { LOG(INFO) << "deleting jit instance" << this; }
 
     bool Init() override;
 

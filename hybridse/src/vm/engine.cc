@@ -51,8 +51,8 @@ EngineOptions::EngineOptions()
       max_sql_cache_size_(1100) {
 }
 
-static absl::Status ExtractRows(const node::ExprNode* expr, const codec::Schema* sc, std::vector<codec::Row>* out)
-    ABSL_ATTRIBUTE_NONNULL();
+static absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const codec::Schema* sc,
+                                std::vector<codec::Row>* out) ABSL_ATTRIBUTE_NONNULL();
 
 Engine::Engine(const std::shared_ptr<Catalog>& catalog) : cl_(catalog), options_(), mu_(), lru_cache_() {}
 Engine::Engine(const std::shared_ptr<Catalog>& catalog, const EngineOptions& options)
@@ -394,15 +394,14 @@ bool RunSession::SetCompileInfo(const std::shared_ptr<CompileInfo>& compile_info
     return true;
 }
 
-absl::Status ExtractRows(const node::ExprNode* expr, const codec::Schema* sc, std::vector<codec::Row>* out) {
+absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const codec::Schema* sc,
+                         std::vector<codec::Row>* out) {
     switch (expr->GetExprType()) {
         case node::kExprStructCtorParens: {
             auto struct_expr = expr->GetAsOrNull<node::StructCtorWithParens>();
             base::Status s;
-            auto jit =
-                std::shared_ptr<hybridse::vm::HybridSeJitWrapper>(vm::HybridSeJitWrapper::CreateWithDefaultSymbols(&s));
-            CHECK_STATUS_TO_ABSL(s);
-            codec::RowBuilder2 builder(jit.get(), {*sc});
+            auto jit = ctx->jit;
+            codec::RowBuilder2 builder(jit, {*sc});
             CHECK_STATUS_TO_ABSL(builder.Init());
             codec::Row r;
             CHECK_STATUS_TO_ABSL(builder.Build(struct_expr->children_, &r));
@@ -415,7 +414,7 @@ absl::Status ExtractRows(const node::ExprNode* expr, const codec::Schema* sc, st
                 return absl::FailedPreconditionError("element number of the request values must not empty");
             }
             for (auto e : arr->children_) {
-                CHECK_ABSL_STATUS(ExtractRows(e, sc, out));
+                CHECK_ABSL_STATUS(ExtractRows(ctx, e, sc, out));
             }
             break;
         }
@@ -443,7 +442,8 @@ absl::Status Engine::ExtractRequestRowsInSQL(SqlContext* sql_ctx) {
         !sql_ctx->request_schema.empty() && sql_ctx->request_expressions != nullptr) {
         // extract rows if request table and request values expression both exists
         vm::Engine::InitializeGlobalLLVM();
-        CHECK_ABSL_STATUS(ExtractRows(sql_ctx->request_expressions, &sql_ctx->request_schema, &sql_ctx->request_rows));
+        CHECK_ABSL_STATUS(
+            ExtractRows(sql_ctx, sql_ctx->request_expressions, &sql_ctx->request_schema, &sql_ctx->request_rows));
     }
     return absl::OkStatus();
 }
