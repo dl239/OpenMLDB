@@ -19,10 +19,8 @@
 #include <unordered_set>
 #include <vector>
 #include "boost/algorithm/string/case_conv.hpp"
-#include "boost/filesystem.hpp"
 #include "boost/filesystem/string_file.hpp"
 
-#include "codegen/type_ir_builder.h"
 #include "plan/plan_api.h"
 #include "udf/udf.h"
 #include "udf/udf_registry.h"
@@ -47,7 +45,7 @@ std::shared_ptr<UdfRegistry> UdfLibrary::Find(
     std::string canonical_name = GetCanonicalName(name);
     std::shared_ptr<UdfLibraryEntry> entry;
     {
-        std::lock_guard<std::mutex> lock(mu_);
+        absl::ReaderMutexLock lock(&mu_);
         auto iter = table_.find(canonical_name);
         if (iter == table_.end()) {
             return nullptr;
@@ -65,7 +63,7 @@ std::shared_ptr<UdfRegistry> UdfLibrary::Find(
 
 bool UdfLibrary::HasFunction(const std::string& name) const {
     std::string canonical_name = GetCanonicalName(name);
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     return table_.find(canonical_name) != table_.end();
 }
 
@@ -78,7 +76,7 @@ void UdfLibrary::InsertRegistry(
     std::string canonical_name = GetCanonicalName(name);
     std::shared_ptr<UdfLibraryEntry> entry = nullptr;
     {
-        std::lock_guard<std::mutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         auto iter = table_.find(canonical_name);
         if (iter == table_.end()) {
             entry = std::make_shared<UdfLibraryEntry>();
@@ -130,7 +128,7 @@ void UdfLibrary::InsertRegistry(
 
 bool UdfLibrary::IsUdaf(const std::string& name, size_t args) const {
     std::string canonical_name = GetCanonicalName(name);
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto iter = table_.find(canonical_name);
     if (iter == table_.end()) {
         return false;
@@ -140,7 +138,7 @@ bool UdfLibrary::IsUdaf(const std::string& name, size_t args) const {
 }
 bool UdfLibrary::IsUdaf(const std::string& name) const {
     std::string canonical_name = GetCanonicalName(name);
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto iter = table_.find(canonical_name);
     if (iter == table_.end()) {
         return false;
@@ -149,7 +147,7 @@ bool UdfLibrary::IsUdaf(const std::string& name) const {
 }
 void UdfLibrary::SetIsUdaf(const std::string& name, size_t args) {
     std::string canonical_name = GetCanonicalName(name);
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     auto iter = table_.find(canonical_name);
     if (iter == table_.end()) {
         LOG(WARNING) << canonical_name
@@ -161,7 +159,7 @@ void UdfLibrary::SetIsUdaf(const std::string& name, size_t args) {
 
 bool UdfLibrary::RequireListAt(const std::string& name, size_t index) const {
     std::string canonical_name = GetCanonicalName(name);
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     auto entry_iter = table_.find(canonical_name);
     if (entry_iter == table_.end()) {
         return false;
@@ -173,7 +171,7 @@ bool UdfLibrary::RequireListAt(const std::string& name, size_t index) const {
 
 bool UdfLibrary::IsListReturn(const std::string& name) const {
     std::string canonical_name = GetCanonicalName(name);
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto iter = table_.find(canonical_name);
     if (iter == table_.end()) {
         return false;
@@ -259,7 +257,7 @@ Status UdfLibrary::RemoveDynamicUdf(const std::string& name, const std::vector<n
         return Status(kCodegenError, "can not find the function in udf table: " + canonical_name);
     }
     if (IsUdaf(canonical_name)) {
-        std::lock_guard<std::mutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         if (table_.erase(canonical_name) <= 0) {
             return Status(kCodegenError, "udaf function not present in udf table: " + canonical_name);
         }
@@ -273,7 +271,7 @@ Status UdfLibrary::RemoveDynamicUdf(const std::string& name, const std::vector<n
             return Status(kCodegenError, "can not find the output function in symbol table: " + lib_name);
         }
     } else {
-        std::lock_guard<std::mutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         if (table_.erase(canonical_name) <= 0) {
             return Status(kCodegenError, "udf function not present in udf table: " + canonical_name);
         }
@@ -363,7 +361,7 @@ Status UdfLibrary::Transform(const std::string& name, UdfResolveContext* ctx,
     std::string canonical_name = GetCanonicalName(name);
     std::shared_ptr<UdfLibraryEntry> entry;
     {
-        std::lock_guard<std::mutex> lock(mu_);
+        absl::ReaderMutexLock lock(&mu_);
         auto iter = table_.find(canonical_name);
         CHECK_TRUE(iter != table_.end(), kCodegenError,
                    "Fail to find registered function: ", canonical_name);
@@ -392,7 +390,7 @@ Status UdfLibrary::ResolveFunction(const std::string& name,
     std::string canonical_name = GetCanonicalName(name);
     std::shared_ptr<UdfLibraryEntry> entry;
     {
-        std::lock_guard<std::mutex> lock(mu_);
+        absl::ReaderMutexLock lock(&mu_);
         auto iter = table_.find(canonical_name);
         CHECK_TRUE(iter != table_.end(), kCodegenError,
                    "Fail to find registered function: ", canonical_name);
@@ -424,14 +422,14 @@ Status UdfLibrary::ResolveFunction(const std::string& name,
 }
 
 void UdfLibrary::AddExternalFunction(const std::string& name, void* addr) {
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     if (external_symbols_.emplace(name, addr).first->second != addr) {
         LOG(WARNING) << "ambiguous external function: " << name;
     }
 }
 
 void UdfLibrary::InitJITSymbols(vm::HybridSeJitWrapper* jit_ptr) {
-    std::lock_guard<std::mutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     for (auto& pair : external_symbols_) {
         jit_ptr->AddExternalFunction(pair.first, pair.second);
     }

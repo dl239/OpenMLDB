@@ -24,6 +24,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "absl/synchronization/mutex.h"
 #include "base/spinlock.h"
 #include "catalog/client_manager.h"
 #include "catalog/distribute_iterator.h"
@@ -302,7 +303,7 @@ class TabletCatalog : public ::hybridse::vm::Catalog {
                                             AggrTableKeyHash,
                                             AggrTableKeyEqual>;
 
-    ::openmldb::base::SpinMutex mu_;
+    absl::Mutex mu_;
     TabletTables tables_;
     TabletDB db_;
     Procedures db_sp_map_;

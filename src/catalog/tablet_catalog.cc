@@ -23,9 +23,7 @@
 #include <utility>
 
 #include "catalog/distribute_iterator.h"
-#include "codec/list_iterator_codec.h"
 #include "glog/logging.h"
-#include "schema/index_util.h"
 #include "schema/schema_adapter.h"
 
 DECLARE_bool(enable_localtablet);
@@ -321,7 +319,7 @@ TabletCatalog::~TabletCatalog() {}
 bool TabletCatalog::Init() { return true; }
 
 std::shared_ptr<::hybridse::type::Database> TabletCatalog::GetDatabase(const std::string& db) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto it = db_.find(db);
     if (it == db_.end()) {
         return std::shared_ptr<::hybridse::type::Database>();
@@ -331,7 +329,7 @@ std::shared_ptr<::hybridse::type::Database> TabletCatalog::GetDatabase(const std
 
 std::shared_ptr<::hybridse::vm::TableHandler> TabletCatalog::GetTable(const std::string& db,
                                                                       const std::string& table_name) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto db_it = tables_.find(db);
     if (db_it == tables_.end()) {
         return std::shared_ptr<::hybridse::vm::TableHandler>();
@@ -351,7 +349,7 @@ bool TabletCatalog::AddTable(const ::openmldb::api::TableMeta& meta,
     }
     const std::string& db_name = meta.db();
     std::shared_ptr<TabletTableHandler> handler;
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     auto db_it = tables_.find(db_name);
     if (db_it == tables_.end()) {
         auto result = tables_.emplace(db_name, std::map<std::string, std::shared_ptr<TabletTableHandler>>());
@@ -383,7 +381,7 @@ bool TabletCatalog::AddTable(const ::openmldb::api::TableMeta& meta,
 }
 
 bool TabletCatalog::AddDB(const ::hybridse::type::Database& db) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     TabletDB::iterator it = db_.find(db.name());
     if (it != db_.end()) {
         return false;
@@ -393,7 +391,7 @@ bool TabletCatalog::AddDB(const ::hybridse::type::Database& db) {
 }
 
 bool TabletCatalog::DeleteTable(const std::string& db, const std::string& table_name, uint32_t tid, uint32_t pid) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     auto db_it = tables_.find(db);
     if (db_it == tables_.end()) {
         return false;
@@ -414,7 +412,7 @@ bool TabletCatalog::DeleteTable(const std::string& db, const std::string& table_
 }
 
 bool TabletCatalog::DeleteDB(const std::string& db) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     return db_.erase(db) > 0;
 }
 
@@ -422,7 +420,7 @@ bool TabletCatalog::IndexSupport() { return true; }
 
 bool TabletCatalog::AddProcedure(const std::string& db, const std::string& sp_name,
                                  const std::shared_ptr<hybridse::sdk::ProcedureInfo>& sp_info) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     auto& sp_map = db_sp_map_[db];
     if (sp_map.find(sp_name) != sp_map.end()) {
         LOG(WARNING) << "procedure " << sp_name << " already exist in db " << db;
@@ -433,7 +431,7 @@ bool TabletCatalog::AddProcedure(const std::string& db, const std::string& sp_na
 }
 
 bool TabletCatalog::DropProcedure(const std::string& db, const std::string& sp_name) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     auto db_it = db_sp_map_.find(db);
     if (db_it == db_sp_map_.end()) {
         LOG(WARNING) << "db " << db << " not exist in sp map";
@@ -453,7 +451,7 @@ bool TabletCatalog::UpdateTableMeta(const ::openmldb::api::TableMeta& meta) {
     const std::string& db_name = meta.db();
     const std::string& table_name = meta.name();
     std::shared_ptr<TabletTableHandler> handler;
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     auto db_it = tables_.find(db_name);
     if (db_it == tables_.end()) {
         LOG(WARNING) << "db " << db_name << " does not exist";
@@ -478,7 +476,7 @@ bool TabletCatalog::UpdateTableInfo(const ::openmldb::nameserver::TableInfo& tab
     const std::string& table_name = table_info.name();
     std::shared_ptr<TabletTableHandler> handler;
     {
-        std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         auto db_it = tables_.find(db_name);
         if (db_it == tables_.end()) {
             auto result = tables_.emplace(db_name, std::map<std::string, std::shared_ptr<TabletTableHandler>>());
@@ -537,7 +535,7 @@ void TabletCatalog::Refresh(const std::vector<::openmldb::nameserver::TableInfo>
         cur_db_it->second.insert(table_name);
     }
 
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     for (auto db_it = tables_.begin(); db_it != tables_.end();) {
         auto cur_db_it = table_map.find(db_it->first);
         if (cur_db_it == table_map.end()) {
@@ -570,7 +568,7 @@ uint64_t TabletCatalog::GetVersion() const { return version_.load(std::memory_or
 
 std::shared_ptr<::hybridse::sdk::ProcedureInfo> TabletCatalog::GetProcedureInfo(const std::string& db,
                                                                                 const std::string& sp_name) {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto db_sp_it = db_sp_map_.find(db);
     if (db_sp_it == db_sp_map_.end()) {
         return nullptr;
@@ -584,7 +582,7 @@ std::shared_ptr<::hybridse::sdk::ProcedureInfo> TabletCatalog::GetProcedureInfo(
 }
 
 const Procedures& TabletCatalog::GetProcedures() {
-    std::lock_guard<::openmldb::base::SpinMutex> spin_lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     return db_sp_map_;
 }
 

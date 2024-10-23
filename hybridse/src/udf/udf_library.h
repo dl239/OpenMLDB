@@ -18,11 +18,9 @@
 #define HYBRIDSE_SRC_UDF_UDF_LIBRARY_H_
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include "base/fe_status.h"
@@ -160,7 +158,7 @@ class UdfLibrary {
     node::NodeManager* node_manager() { return &nm_; }
 
     std::unordered_map<std::string, std::shared_ptr<UdfLibraryEntry>> GetAllRegistries() {
-        std::lock_guard<std::mutex> lock(mu_);
+        absl::ReaderMutexLock lock(&mu_);
         return table_;
     }
 
@@ -184,7 +182,7 @@ class UdfLibrary {
     DynamicLibManager lib_manager_;
 
     const bool case_sensitive_ = false;
-    mutable std::mutex mu_;
+    mutable absl::Mutex mu_;
 };
 
 const std::string GetArgSignature(const std::vector<node::ExprNode*>& args);

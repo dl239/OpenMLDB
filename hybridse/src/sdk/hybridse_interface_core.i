@@ -172,6 +172,7 @@ using hybridse::node::DataType;
 %ignore hybridse::vm::AysncRowHandler;
 %ignore DataTypeName; // TODO: Generate duplicated class
 %ignore hybridse::vm::HybridSeJitWrapper::AddModule;
+%ignore hybridse::vm::HybridSeJitWrapper::AddRemovableModule;
 
 // Ignore the unique_ptr functions
 %ignore hybridse::vm::MemTableHandler::GetWindowIterator;

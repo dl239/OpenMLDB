@@ -73,6 +73,7 @@ bool SqlCompiler::Compile(SqlContext& ctx, Status& status) {  // NOLINT
         ctx.logical_plan[0]->Print(logical_plan_ss, "\t");
         ctx.logical_plan_str = logical_plan_ss.str();
     }
+    ctx.udf_library = udf::DefaultUdfLibrary::get();
     auto jit_rs = vm::GlobalJIT(ctx.jit_options);
     if (!jit_rs.ok()) {
         status = {common::kCodegenError, jit_rs.status().ToString()};
@@ -83,7 +84,6 @@ bool SqlCompiler::Compile(SqlContext& ctx, Status& status) {  // NOLINT
 
     auto llvm_ctx = std::make_unique<::llvm::LLVMContext>();
     auto m = std::make_unique<::llvm::Module>(jit->UniqueModuleName("sql"), *llvm_ctx);
-    ctx.udf_library = udf::DefaultUdfLibrary::get();
 
     status = BuildPhysicalPlan(&ctx, ctx.logical_plan, m.get(), &ctx.physical_plan);
     if (!status.isOK()) {

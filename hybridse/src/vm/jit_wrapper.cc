@@ -262,7 +262,7 @@ void InitBuiltinJitSymbols(HybridSeJitWrapper* jit) {
 
 absl::StatusOr<HybridSeJitWrapper*> GlobalJIT(const JitOptions& jit_options) {
     base::Status s;
-    static HybridSeJitWrapper* jit = HybridSeJitWrapper::CreateWithDefaultSymbols(&s, jit_options);
+    thread_local static HybridSeJitWrapper* jit = HybridSeJitWrapper::CreateWithDefaultSymbols(&s, jit_options);
     CHECK_STATUS_TO_ABSL(s);
     if (jit == nullptr) {
         return absl::InternalError("got nullptr jit");

@@ -157,8 +157,6 @@ class PhysicalPlanContext {
 
     // parameters types
     const codec::Schema* parameter_types_;
-    // unique id counter for codegen function name id
-    size_t codegen_func_id_counter_ = 0;
 
     bool enable_expr_opt_ = false;
     const std::unordered_map<std::string, std::string>* options_ = nullptr;
