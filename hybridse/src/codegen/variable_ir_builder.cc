@@ -225,9 +225,10 @@ bool hybridse::codegen::VariableIRBuilder::LoadArrayIndex(
     }
     ::llvm::Value* array_ptr = array_ptr_wrapper.GetValue(&builder);
     ::llvm::Value* ptr = builder.CreateInBoundsGEP(
+        array_ptr->getType()->getPointerElementType(),
         array_ptr, ::llvm::ArrayRef<::llvm::Value*>(builder.getInt64(index)));
 
-    ::llvm::Value* value = builder.CreateLoad(ptr);
+    ::llvm::Value* value = builder.CreateLoad(array_ptr->getType()->getPointerElementType(), ptr);
     if (nullptr == value) {
         status.msg =
             "fail load " + array_ptr_name + "[" + std::to_string(index) + "]";

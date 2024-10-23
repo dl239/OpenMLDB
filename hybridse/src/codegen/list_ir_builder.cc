@@ -149,7 +149,7 @@ Status ListIRBuilder::BuildIteratorNext(::llvm::Value* iterator,
     if (elem_nullable) {
         if (TypeIRBuilder::IsStructPtr(v1_type)) {
             v1_type = reinterpret_cast<::llvm::PointerType*>(v1_type)
-                          ->getElementType();
+                          ->getPointerElementType();
         }
         ::llvm::Type* bool_ty = ::llvm::Type::getInt1Ty(block_->getContext());
         ::std::string fn_name =
@@ -172,10 +172,10 @@ Status ListIRBuilder::BuildIteratorNext(::llvm::Value* iterator,
 
         ::llvm::Value* next_raw = next_addr;
         if (!TypeIRBuilder::IsStructPtr(next_addr->getType())) {
-            next_raw = builder.CreateLoad(next_addr);
+            next_raw = builder.CreateLoad(next_addr->getType()->getPointerElementType(), next_addr);
         }
         *output = NativeValue::CreateWithFlag(next_raw,
-                                              builder.CreateLoad(is_null_addr));
+                                              builder.CreateLoad(bool_ty, is_null_addr));
     } else {
         if (TypeIRBuilder::IsStructPtr(v1_type)) {
             return BuildStructTypeIteratorNext(iterator, elem_type, output);

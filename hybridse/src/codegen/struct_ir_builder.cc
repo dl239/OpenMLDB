@@ -124,7 +124,7 @@ bool StructTypeIRBuilder::Load(::llvm::BasicBlock* block, ::llvm::Value* struct_
     }
 
     ::llvm::IRBuilder<> builder(block);
-    *output = builder.CreateLoad(value_ptr);
+    *output = builder.CreateLoad(value_ptr->getType()->getPointerElementType(), value_ptr);
     return true;
 }
 bool StructTypeIRBuilder::Set(::llvm::BasicBlock* block, ::llvm::Value* struct_value, unsigned int idx,

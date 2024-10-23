@@ -41,17 +41,15 @@ static const char* PREFIX = "fe.map";
 #define VALUE_NULL_VEC_IDX 3
 #define FIELDS_CNT 4
 
-
 MapIRBuilder::MapIRBuilder(::llvm::Module* m, ::llvm::Type* key_ty, ::llvm::Type* value_ty)
     : StructTypeIRBuilder(m), key_type_(key_ty), value_type_(value_ty) {
     InitStructType();
 }
 
 void MapIRBuilder::InitStructType() {
-    std::string name =
-        absl::StrCat(PREFIX, "__", GetIRTypeName(key_type_), "_", GetIRTypeName(value_type_), "__");
+    std::string name = absl::StrCat(PREFIX, "__", GetIRTypeName(key_type_), "_", GetIRTypeName(value_type_), "__");
     ::llvm::StringRef sr(name);
-    ::llvm::StructType* stype = m_->getTypeByName(sr);
+    ::llvm::StructType* stype = llvm::StructType::getTypeByName(m_->getContext(), sr);
     if (stype != NULL) {
         struct_type_ = stype;
         return;
@@ -96,10 +94,12 @@ absl::StatusOr<NativeValue> MapIRBuilder::Construct(CodeGenContextBase* ctx, abs
     // creating raw values for map
 
     CastExprIRBuilder cast_builder(ctx->GetCurrentBlock());
+    auto i32_ty = builder->getInt32Ty();
+    auto i1_ty = builder->getInt1Ty();
 
     // original vector, may contains duplicate keys
     auto* original_keys = builder->CreateAlloca(key_type_, original_size, "original_keys");
-    auto* original_keys_is_null = builder->CreateAlloca(builder->getInt1Ty(), original_size, "original_keys_is_null");
+    auto* original_keys_is_null = builder->CreateAlloca(i1_ty, original_size, "original_keys_is_null");
     auto* original_values = builder->CreateAlloca(value_type_, original_size, "original_values");
     auto* original_values_is_null =
         builder->CreateAlloca(builder->getInt1Ty(), original_size, "original_values_is_null");
@@ -119,40 +119,48 @@ absl::StatusOr<NativeValue> MapIRBuilder::Construct(CodeGenContextBase* ctx, abs
                 return absl::InternalError(absl::StrCat("fail to case map value: ", s.str()));
             }
         }
-        builder->CreateStore(key.GetIsNull(ctx), builder->CreateGEP(original_keys_is_null, update_idx));
-        builder->CreateStore(key.GetValue(ctx), builder->CreateGEP(original_keys, update_idx));
-        builder->CreateStore(value.GetIsNull(ctx), builder->CreateGEP(original_values_is_null, update_idx));
-        builder->CreateStore(value.GetValue(ctx), builder->CreateGEP(original_values, update_idx));
+        builder->CreateStore(key.GetIsNull(ctx),
+                             builder->CreateGEP(builder->getInt1Ty(), original_keys_is_null, update_idx));
+        builder->CreateStore(key.GetValue(ctx), builder->CreateGEP(key_type_, original_keys, update_idx));
+        builder->CreateStore(value.GetIsNull(ctx),
+                             builder->CreateGEP(builder->getInt1Ty(), original_values_is_null, update_idx));
+        builder->CreateStore(value.GetValue(ctx), builder->CreateGEP(value_type_, original_values, update_idx));
     }
 
-    ::llvm::Value* update_idx_ptr = builder->CreateAlloca(builder->getInt32Ty(), nullptr, "update_idx");
+    ::llvm::Value* update_idx_ptr = builder->CreateAlloca(i32_ty, nullptr, "update_idx");
     builder->CreateStore(builder->getInt32(0), update_idx_ptr);
-    ::llvm::Value* true_idx_ptr = builder->CreateAlloca(builder->getInt32Ty(), nullptr, "true_idx");
+    ::llvm::Value* true_idx_ptr = builder->CreateAlloca(i32_ty, nullptr, "true_idx");
     builder->CreateStore(builder->getInt32(0), true_idx_ptr);
 
     auto s = ctx->CreateWhile(
         [&](llvm::Value** cond) -> base::Status {
             *cond = builder->CreateAnd(
-                builder->CreateICmpSLT(builder->CreateLoad(update_idx_ptr), original_size, "if_while_true"),
-                builder->CreateICmpSLT(builder->CreateLoad(true_idx_ptr), original_size));
+                builder->CreateICmpSLT(builder->CreateLoad(i32_ty, update_idx_ptr), original_size, "if_while_true"),
+                builder->CreateICmpSLT(builder->CreateLoad(i32_ty, true_idx_ptr), original_size));
             return {};
         },
         [&]() -> base::Status {
-            auto idx = builder->CreateLoad(update_idx_ptr, "update_idx_value");
-            auto true_idx = builder->CreateLoad(true_idx_ptr, "true_idx_value");
-            CHECK_STATUS(ctx->CreateBranchNot(
-                builder->CreateLoad(builder->CreateGEP(original_keys_is_null, idx)), [&]() -> base::Status {
-                    // write to map if key is not null
-                    builder->CreateStore(builder->CreateLoad(builder->CreateGEP(original_keys, idx)),
-                                         builder->CreateGEP(key_vec, true_idx));
-                    builder->CreateStore(builder->CreateLoad(builder->CreateGEP(original_values, idx)),
-                                         builder->CreateGEP(value_vec, true_idx));
-                    builder->CreateStore(builder->CreateLoad(builder->CreateGEP(original_values_is_null, idx)),
-                                         builder->CreateGEP(value_nulls_vec, true_idx));
+            auto idx = builder->CreateLoad(i32_ty, update_idx_ptr, "update_idx_value");
+            auto true_idx = builder->CreateLoad(i32_ty, true_idx_ptr, "true_idx_value");
+            CHECK_STATUS(
+                ctx->CreateBranchNot(
+                    builder->CreateLoad(i1_ty, builder->CreateGEP(i1_ty, original_keys_is_null, idx)),
+                    [&]() -> base::Status {
+                        // write to map if key is not null
+                        builder->CreateStore(
+                            builder->CreateLoad(key_type_, builder->CreateGEP(key_type_, original_keys, idx)),
+                            builder->CreateGEP(key_type_, key_vec, true_idx));
+                        builder->CreateStore(
+                            builder->CreateLoad(value_type_, builder->CreateGEP(value_type_, original_values, idx)),
+                            builder->CreateGEP(value_type_, value_vec, true_idx));
+                        builder->CreateStore(
+                            builder->CreateLoad(i1_ty, builder->CreateGEP(i1_ty, original_values_is_null, idx)),
+                            builder->CreateGEP(i1_ty, value_nulls_vec, true_idx));
 
-                    builder->CreateStore(builder->CreateAdd(builder->getInt32(1), true_idx), true_idx_ptr);
-                    return {};
-                }), "pick_and_write_non_null_key");
+                        builder->CreateStore(builder->CreateAdd(builder->getInt32(1), true_idx), true_idx_ptr);
+                        return {};
+                    }),
+                "pick_and_write_non_null_key");
 
             builder->CreateStore(builder->CreateAdd(builder->getInt32(1), idx), update_idx_ptr);
             return {};
@@ -160,7 +168,7 @@ absl::StatusOr<NativeValue> MapIRBuilder::Construct(CodeGenContextBase* ctx, abs
         "pick_non_null_kyes_for_map");
     CHECK_STATUS_TO_ABSL(s);
 
-    auto* final_size = builder->CreateLoad(true_idx_ptr, "true_size");
+    auto* final_size = builder->CreateLoad(i32_ty, true_idx_ptr, "true_size");
     auto as = Set(ctx, map_alloca, {final_size, key_vec, value_vec, value_nulls_vec});
 
     if (!as.ok()) {
@@ -226,6 +234,9 @@ absl::StatusOr<NativeValue> MapIRBuilder::ExtractElement(CodeGenContextBase* ctx
         llvm::Value* sz_alloca = builder->CreateAlloca(builder->getInt32Ty());
         llvm::Value* keys_alloca = builder->CreateAlloca(key_type_->getPointerTo());
 
+        auto i32_ty = builder->getInt32Ty();
+        auto i1_ty = builder->getInt1Ty();
+
         auto s = ctx->CreateBranchNot(
             builder->CreateOr(arr_is_null_param, key_is_null_param),
             [&]() -> base::Status {
@@ -245,16 +256,20 @@ absl::StatusOr<NativeValue> MapIRBuilder::ExtractElement(CodeGenContextBase* ctx
                 CHECK_STATUS(
                     ctx->CreateWhile(
                         [&](::llvm::Value** cond) -> base::Status {
-                            ::llvm::Value* idx = builder->CreateLoad(idx_alloc);
-                            ::llvm::Value* found = builder->CreateLoad(found_idx_alloc);
-                            *cond = builder->CreateAnd(builder->CreateICmpSLT(idx, builder->CreateLoad(sz_alloca)),
-                                                       builder->CreateICmpSLT(found, builder->getInt32(0)));
+                            ::llvm::Value* idx = builder->CreateLoad(i32_ty, idx_alloc);
+                            ::llvm::Value* found = builder->CreateLoad(i32_ty, found_idx_alloc);
+                            *cond =
+                                builder->CreateAnd(builder->CreateICmpSLT(idx, builder->CreateLoad(i32_ty, sz_alloca)),
+                                                   builder->CreateICmpSLT(found, builder->getInt32(0)));
                             return {};
                         },
                         [&]() -> base::Status {
-                            ::llvm::Value* idx = builder->CreateLoad(idx_alloc);
+                            ::llvm::Value* idx = builder->CreateLoad(i32_ty, idx_alloc);
                             // key never null
-                            auto* ele = builder->CreateLoad(builder->CreateGEP(builder->CreateLoad(keys_alloca), idx));
+                            auto* ele = builder->CreateLoad(
+                                key_type_,
+                                builder->CreateGEP(key_type_,
+                                                   builder->CreateLoad(key_type_->getPointerTo(), keys_alloca), idx));
                             ::llvm::Value* eq = nullptr;
                             base::Status s;
                             PredicateIRBuilder::BuildEqExpr(ctx->GetCurrentBlock(), ele, key_val_param, &eq, s);
@@ -268,10 +283,10 @@ absl::StatusOr<NativeValue> MapIRBuilder::ExtractElement(CodeGenContextBase* ctx
                         }),
                     "iter_map");
 
-                auto* found_idx = builder->CreateLoad(found_idx_alloc);
+                auto* found_idx = builder->CreateLoad(i32_ty, found_idx_alloc);
 
                 CHECK_STATUS(ctx->CreateBranch(
-                    builder->CreateAnd(builder->CreateICmpSLT(found_idx, builder->CreateLoad(sz_alloca)),
+                    builder->CreateAnd(builder->CreateICmpSLT(found_idx, builder->CreateLoad(i32_ty, sz_alloca)),
                                        builder->CreateICmpSGE(found_idx, builder->getInt32(0))),
                     [&]() -> base::Status {
                         ::llvm::Value* values = nullptr;
@@ -282,8 +297,10 @@ absl::StatusOr<NativeValue> MapIRBuilder::ExtractElement(CodeGenContextBase* ctx
                         CHECK_TRUE(Load(ctx->GetCurrentBlock(), map_ptr_param, VALUE_NULL_VEC_IDX, &value_nulls),
                                    common::kCodegenError);
 
-                        auto* val = builder->CreateLoad(builder->CreateGEP(values, found_idx));
-                        auto* val_nullable = builder->CreateLoad(builder->CreateGEP(value_nulls, found_idx));
+                        auto* val =
+                            builder->CreateLoad(value_type_, builder->CreateGEP(value_type_, values, found_idx));
+                        auto* val_nullable =
+                            builder->CreateLoad(i1_ty, builder->CreateGEP(i1_ty, value_nulls, found_idx));
 
                         builder->CreateStore(val, out_val_alloca_param);
                         builder->CreateStore(val_nullable, out_null_alloca_param);
@@ -313,7 +330,8 @@ absl::StatusOr<NativeValue> MapIRBuilder::ExtractElement(CodeGenContextBase* ctx
     builder->CreateCall(fn, {arr.GetValue(builder), arr.GetIsNull(builder), key.GetValue(builder),
                              key.GetIsNull(builder), out_val_alloca, out_null_alloca});
 
-    return NativeValue::CreateWithFlag(builder->CreateLoad(out_val_alloca), builder->CreateLoad(out_null_alloca));
+    return NativeValue::CreateWithFlag(builder->CreateLoad(value_type_, out_val_alloca),
+                                       builder->CreateLoad(builder->getInt1Ty(), out_null_alloca));
 }
 
 absl::StatusOr<NativeValue> MapIRBuilder::MapKeys(CodeGenContextBase* ctx, const NativeValue& in) const {
@@ -335,6 +353,8 @@ absl::StatusOr<NativeValue> MapIRBuilder::MapKeys(CodeGenContextBase* ctx, const
         return absl::FailedPreconditionError("failed to extract map size");
     }
 
+    auto i32_ty = builder->getInt32Ty();
+    auto i1_ty = builder->getInt1Ty();
     // construct nulls as [false ...]
     auto nulls = builder->CreateAlloca(builder->getInt1Ty(), size);
     auto idx_ptr = builder->CreateAlloca(builder->getInt32Ty());
@@ -342,13 +362,13 @@ absl::StatusOr<NativeValue> MapIRBuilder::MapKeys(CodeGenContextBase* ctx, const
     {
         auto s = ctx->CreateWhile(
             [&](::llvm::Value** cond) -> base::Status {
-                *cond = builder->CreateICmpSLT(builder->CreateLoad(idx_ptr), size);
+                *cond = builder->CreateICmpSLT(builder->CreateLoad(i32_ty, idx_ptr), size);
                 return {};
             },
             [&]() -> base::Status {
-                auto idx = builder->CreateLoad(idx_ptr);
+                auto idx = builder->CreateLoad(i32_ty, idx_ptr);
 
-                builder->CreateStore(builder->getInt1(false), builder->CreateGEP(nulls, idx));
+                builder->CreateStore(builder->getInt1(false), builder->CreateGEP(i1_ty, nulls, idx));
 
                 builder->CreateStore(builder->CreateAdd(idx, builder->getInt32(1)), idx_ptr);
                 return {};
@@ -368,8 +388,9 @@ absl::StatusOr<NativeValue> MapIRBuilder::MapKeys(CodeGenContextBase* ctx, const
 
     NativeValue out;
     CondSelectIRBuilder cond_builder;
-    auto s = cond_builder.Select(ctx->GetCurrentBlock(), NativeValue::Create(map_is_null),
-                        NativeValue::CreateNull(array_builder.GetType()), NativeValue::Create(rs.value()), &out);
+    auto s =
+        cond_builder.Select(ctx->GetCurrentBlock(), NativeValue::Create(map_is_null),
+                            NativeValue::CreateNull(array_builder.GetType()), NativeValue::Create(rs.value()), &out);
 
     if (!s.isOK()) {
         return absl::FailedPreconditionError(s.str());
@@ -462,6 +483,7 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::CalEncodeSizeForArray(CodeGenContextB
     }
 
     auto builder = ctx->GetBuilder();
+    auto i32_ty = builder->getInt32Ty();
 
     std::string fn_name =
         absl::StrCat("calc_encode_arr_sz_", GetIRTypeName(arr_ptr->getType()->getPointerElementType()));
@@ -491,15 +513,16 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::CalEncodeSizeForArray(CodeGenContextB
 
         auto s = ctx->CreateWhile(
             [&](llvm::Value** cond) -> base::Status {
-                auto* idx = sub_builder->CreateLoad(idx_ptr);
+                auto* idx = sub_builder->CreateLoad(i32_ty, idx_ptr);
                 *cond = sub_builder->CreateICmpSLT(idx, sz_param);
                 return {};
             },
             [&]() -> base::Status {
-                auto* sz = sub_builder->CreateLoad(sz_ptr);
-                auto* idx = sub_builder->CreateLoad(idx_ptr);
+                auto* sz = sub_builder->CreateLoad(i32_ty, sz_ptr);
+                auto* idx = sub_builder->CreateLoad(i32_ty, idx_ptr);
                 auto ele_ptr =
-                    sub_builder->CreateLoad(sub_builder->CreateGEP(arr_type->getPointerElementType(), arr_param, idx));
+                    sub_builder->CreateLoad(arr_type->getPointerElementType(),
+                                            sub_builder->CreateGEP(arr_type->getPointerElementType(), arr_param, idx));
                 auto ele_sz_res = TypeEncodeByteSize(ctx, arr_type->getPointerElementType(), ele_ptr);
                 if (!ele_sz_res.ok()) {
                     return {common::kCodegenError, ele_sz_res.status().ToString()};
@@ -513,7 +536,7 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::CalEncodeSizeForArray(CodeGenContextB
             return absl::InternalError(absl::StrCat("codegen row size error: ", s.GetMsg()));
         }
 
-        sub_builder->CreateRet(sub_builder->CreateLoad(sz_ptr));
+        sub_builder->CreateRet(sub_builder->CreateLoad(i32_ty, sz_ptr));
     }
 
     return builder->CreateCall(fn, {arr_ptr, arr_size});
@@ -720,7 +743,7 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::EncodeBaseValue(CodeGenContextBase* c
                                             builder->getInt8Ty()->getPointerTo());
                 CHECK_ABSL_STATUSOR(s2);
 
-                builder->CreateMemCpy(s2.value(), 0, str, 0, sz);
+                builder->CreateMemCpy(s2.value(), llvm::MaybeAlign(0), str, llvm::MaybeAlign(0), sz);
 
                 return builder->CreateAdd(builder->getInt32(4), sz);
             }
@@ -734,6 +757,7 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::EncodeBaseValue(CodeGenContextBase* c
 
 absl::StatusOr<llvm::Value*> MapIRBuilder::Decode(CodeGenContextBase* ctx, llvm::Value* row_ptr) const {
     auto* builder = ctx->GetBuilder();
+    auto i32_ty = builder->getInt32Ty();
     auto* map_sz = builder->CreateLoad(builder->getInt32Ty(),
                                        builder->CreatePointerCast(row_ptr, builder->getInt32Ty()->getPointerTo()));
 
@@ -756,11 +780,11 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::Decode(CodeGenContextBase* ctx, llvm:
         // also allocate space for pointer type that points to
         CHECK_STATUS(ctx->CreateWhile(
             [&](llvm::Value** cond) -> base::Status {
-                *cond = ctx->GetBuilder()->CreateICmpSLT(builder->CreateLoad(idx0_alloca), map_sz);
+                *cond = ctx->GetBuilder()->CreateICmpSLT(builder->CreateLoad(i32_ty, idx0_alloca), map_sz);
                 return {};
             },
             [&]() -> base::Status {
-                llvm::Value* idx = builder->CreateLoad(idx0_alloca);
+                llvm::Value* idx = builder->CreateLoad(i32_ty, idx0_alloca);
                 if (key_type_->isPointerTy()) {
                     auto* ele_val = builder->CreateAlloca(key_type_->getPointerElementType());
                     builder->CreateStore(ele_val, builder->CreateGEP(key_type_, key_vec, idx));
@@ -807,6 +831,7 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::DecodeArrayValue(CodeGenContextBase* 
                                                             llvm::Value* sz, llvm::Value* arr_alloca,
                                                             llvm::Type* ele_ty) const {
     auto* builder = ctx->GetBuilder();
+    auto i32_ty = builder->getInt32Ty();
 
     std::string fn_name = absl::StrCat("decode_map_arr_", GetIRTypeName(ele_ty));
     llvm::Function* fn = ctx->GetModule()->getFunction(fn_name);
@@ -837,12 +862,12 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::DecodeArrayValue(CodeGenContextBase* 
 
         auto s = ctx->CreateWhile(
             [&](llvm::Value** cond) -> base::Status {
-                *cond = sub_builder->CreateICmpSLT(sub_builder->CreateLoad(idx_ptr), sz_param);
+                *cond = sub_builder->CreateICmpSLT(sub_builder->CreateLoad(i32_ty, idx_ptr), sz_param);
                 return {};
             },
             [&]() -> base::Status {
-                auto offset = sub_builder->CreateLoad(offset_ptr);
-                auto idx = sub_builder->CreateLoad(idx_ptr);
+                auto offset = sub_builder->CreateLoad(i32_ty, offset_ptr);
+                auto idx = sub_builder->CreateLoad(i32_ty, idx_ptr);
                 auto row_with_offset =
                     BuildGetPtrOffset(sub_builder, row_ptr_param, offset, sub_builder->getInt8PtrTy());
                 CHECK_TRUE(row_with_offset.ok(), common::kCodegenError, row_with_offset.status().ToString());
@@ -854,12 +879,13 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::DecodeArrayValue(CodeGenContextBase* 
                 sub_builder->CreateStore(sub_builder->CreateAdd(s.value(), offset), offset_ptr);
                 sub_builder->CreateStore(sub_builder->CreateAdd(sub_builder->getInt32(1), idx), idx_ptr);
                 return {};
-            }, "decode_map_arr");
+            },
+            "decode_map_arr");
         if (!s.isOK()) {
             return absl::InternalError(s.GetMsg());
         }
 
-        sub_builder->CreateRet(sub_builder->CreateLoad(offset_ptr));
+        sub_builder->CreateRet(sub_builder->CreateLoad(i32_ty, offset_ptr));
     }
 
     return builder->CreateCall(fn, {row_ptr, arr_alloca, sz});
@@ -918,7 +944,7 @@ absl::StatusOr<llvm::Value*> MapIRBuilder::DecodeBaseValue(CodeGenContextBase* c
                 CHECK_ABSL_STATUSOR(data_ptr_res);
                 builder->CreateStore(data_ptr_res.value(), str_data_ptr);
 
-                return builder->CreateAdd(builder->CreateLoad(str_sz_ptr), sz_res.value());
+                return builder->CreateAdd(builder->CreateLoad(builder->getInt32Ty(), str_sz_ptr), sz_res.value());
             }
         }
     }
@@ -936,6 +962,8 @@ absl::StatusOr<llvm::Function*> MapIRBuilder::GetOrBuildEncodeArrFunction(CodeGe
     }
 
     auto* builder = ctx->GetBuilder();
+    auto i32_ty = builder->getInt32Ty();
+
     llvm::FunctionType* fnt = llvm::FunctionType::get(
         builder->getInt32Ty(), {builder->getInt8Ty()->getPointerTo(), ele_type->getPointerTo(), builder->getInt32Ty()},
         false);
@@ -958,15 +986,15 @@ absl::StatusOr<llvm::Function*> MapIRBuilder::GetOrBuildEncodeArrFunction(CodeGe
     // definition
     auto s = ctx->CreateWhile(
         [&](llvm::Value** cond) -> base::Status {
-            llvm::Value* idx = sub_builder->CreateLoad(idx_ptr);
+            llvm::Value* idx = sub_builder->CreateLoad(i32_ty, idx_ptr);
             *cond = sub_builder->CreateICmpSLT(idx, arr_size);
             return {};
         },
         [&]() -> base::Status {
-            llvm::Value* idx = sub_builder->CreateLoad(idx_ptr);
-            llvm::Value* ele = sub_builder->CreateLoad(ele_type, sub_builder->CreateGEP(arr_ptr, idx));
+            llvm::Value* idx = sub_builder->CreateLoad(i32_ty, idx_ptr);
+            llvm::Value* ele = sub_builder->CreateLoad(ele_type, sub_builder->CreateGEP(ele_type, arr_ptr, idx));
             // write ele
-            llvm::Value* offset = sub_builder->CreateLoad(written_ptr);
+            llvm::Value* offset = sub_builder->CreateLoad(i32_ty, written_ptr);
             auto s = EncodeBaseValue(ctx, ele, row_ptr, offset);
             CHECK_TRUE(s.ok(), common::kCodegenError, s.status().ToString());
             // update states
@@ -982,7 +1010,6 @@ absl::StatusOr<llvm::Function*> MapIRBuilder::GetOrBuildEncodeArrFunction(CodeGe
 
     return fn;
 }
-
 
 }  // namespace codegen
 }  // namespace hybridse

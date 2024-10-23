@@ -19,7 +19,9 @@
 
 #include <memory>
 #include <string>
+
 #include "base/raw_buffer.h"
+#include "llvm/ExecutionEngine/Orc/Core.h"
 #include "llvm/IR/Module.h"
 #include "vm/core_api.h"
 #include "vm/engine_context.h"
@@ -47,11 +49,17 @@ class HybridSeJitWrapper {
     virtual bool AddModule(std::unique_ptr<llvm::Module> module,
                            std::unique_ptr<llvm::LLVMContext> llvm_ctx) = 0;
 
+    /// add a module that can later be removed by the returned ResourceTracker
+    virtual absl::StatusOr<llvm::orc::ResourceTrackerSP> AddRemovableModule(
+        std::unique_ptr<llvm::Module> module, std::unique_ptr<llvm::LLVMContext> llvm_ctx) = 0;
+
     virtual bool AddExternalFunction(const std::string& name, void* addr) = 0;
 
     bool AddModuleFromBuffer(const base::RawBuffer&);
 
     virtual hybridse::vm::RawPtrHandle FindFunction(const std::string& funcname) = 0;
+
+    std::string UniqueModuleName(absl::string_view tag) { return absl::StrCat(tag, "_", symbol_idx_.fetch_add(1)); }
 
     // create the JIT wrapper with default builtin symbols imported already
     static HybridSeJitWrapper* CreateWithDefaultSymbols(udf::UdfLibrary*, base::Status*,
@@ -78,8 +86,12 @@ class HybridSeJitWrapper {
     // set lib via SetLib before Init
     udf::UdfLibrary* lib_ = nullptr;
 
+    std::atomic<int64_t> symbol_idx_ = 0;
+
     bool initialized_ = false;
 };
+
+absl::StatusOr<HybridSeJitWrapper*> GlobalJIT(const JitOptions& jit_options = {});
 
 }  // namespace vm
 }  // namespace hybridse

@@ -150,7 +150,7 @@ FunctionScopeGuard::FunctionScopeGuard(llvm::Function* function,
                                        CodeGenContextBase* ctx)
     : ctx_(ctx),
       prev_function_(ctx->GetCurrentFunction()),
-      sub_guard_(ctx->GetFunctionScope(function->getName())) {
+      sub_guard_(ctx->GetFunctionScope(function->getName().str())) {
     ctx_->SetCurrentFunction(function);
 }
 

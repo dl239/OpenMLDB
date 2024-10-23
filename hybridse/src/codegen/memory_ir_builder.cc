@@ -69,7 +69,7 @@ base::Status MemoryIRBuilder::MemoryCopy(::llvm::BasicBlock* block,
                kCodegenError, "fail to add memory addr: size cast int64 fail");
 
     ::llvm::Value* ret =
-        builder.CreateMemCpy(dist.GetRaw(), 1, src.GetRaw(), 1, size_int64);
+        builder.CreateMemCpy(dist.GetRaw(), llvm::Align(1), src.GetRaw(), llvm::Align(1), size_int64);
     CHECK_TRUE(nullptr != ret, kCodegenError,
                "fail to copy memory, CreateMemCpy fail");
     return base::Status();

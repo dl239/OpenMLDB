@@ -181,7 +181,10 @@ bool BufNativeIRBuilder::BuildGetField(size_t col_idx, ::llvm::Value* slice_ptr,
             MapIRBuilder map_builder(ctx_->GetModule(), key_type, value_type);
 
             auto raw = str_val.GetValue(&builder);
-            llvm::Value* map_encoded_str = builder.CreateLoad(builder.CreateStructGEP(raw, 1, "load_map_encoded_str"));
+            StringIRBuilder string_ir_builder(ctx_->GetModule());
+            llvm::Value* map_encoded_str = builder.CreateLoad(
+                builder.getInt8PtrTy(),
+                builder.CreateStructGEP(string_ir_builder.GetType(), raw, 1, "load_map_encoded_str"));
             auto res = map_builder.Decode(ctx_, map_encoded_str);
             if (!res.ok()) {
                 return false;
@@ -213,7 +216,7 @@ bool BufNativeIRBuilder::BuildGetPrimaryField(const std::string& fn_name, ::llvm
         ctx_->GetModule()->getOrInsertFunction(fn_name, type, i8_ptr_ty, i32_ty, i32_ty, i8_ptr_ty);
 
     ::llvm::Value* raw = builder->CreateCall(callee, {row_ptr, val_col_idx, val_offset, is_null_alloca});
-    ::llvm::Value* is_null = builder->CreateLoad(is_null_alloca);
+    ::llvm::Value* is_null = builder->CreateLoad(builder->getInt8Ty(), is_null_alloca);
     *output = NativeValue::CreateWithFlag(raw, is_null);
     return true;
 }
@@ -269,7 +272,7 @@ bool BufNativeIRBuilder::BuildGetStringField(uint32_t col_idx, uint32_t offset, 
     builder->CreateCall(callee, {row_ptr, val_col_idx, str_offset, next_str_offset, builder->getInt32(str_start_offset),
                                 str_addr_space, data_ptr_ptr, size_ptr, is_null_alloca});
 
-    ::llvm::Value* is_null = builder->CreateLoad(is_null_alloca);
+    ::llvm::Value* is_null = builder->CreateLoad(bool_ty, is_null_alloca);
     *output = NativeValue::CreateWithFlag(string_ref, is_null);
     return true;
 }
@@ -594,7 +597,7 @@ base::Status BufNativeEncoderIRBuilder::AppendHeader(::llvm::Value* i8_ptr, ::ll
 
     auto s = BuildGetPtrOffset(&builder_, i8_ptr, builder_.getInt32(6));
     CHECK_TRUE(s.ok(), common::kCodegenEncodeError, s.status().ToString());
-    builder_.CreateMemSet(s.value(), builder_.getInt8(0), bitmap_size, 1u);
+    builder_.CreateMemSet(s.value(), builder_.getInt8(0), bitmap_size, llvm::Align(1));
     return base::Status::OK();
 }
 

@@ -40,7 +40,7 @@ ArrayIRBuilder::ArrayIRBuilder(::llvm::Module* m, llvm::Type* ele_ty)
 void ArrayIRBuilder::InitStructType() {
     // name must unique between different array type
     std::string name = absl::StrCat("fe.array_", GetLlvmObjectString(element_type_));
-    ::llvm::StructType* stype = m_->getTypeByName(name);
+    ::llvm::StructType* stype = llvm::StructType::getTypeByName(m_->getContext(), name);
     if (stype != NULL) {
         struct_type_ = stype;
         return;
@@ -86,9 +86,9 @@ absl::StatusOr<NativeValue> ArrayIRBuilder::Construct(CodeGenContextBase* ctx,
     builder.CreateStore(builder.getInt64(0), idx_val_ptr);
 
     for (auto& val : elements) {
-        auto* idx_val = builder.CreateLoad(idx_val_ptr);
-        auto* raw_ele_ptr = builder.CreateGEP(raw_array_ptr, idx_val);
-        auto* nullable_ele = builder.CreateGEP(nullables_ptr, idx_val);
+        auto* idx_val = builder.CreateLoad(builder.getInt64Ty(), idx_val_ptr);
+        auto* raw_ele_ptr = builder.CreateGEP(element_type_, raw_array_ptr, idx_val);
+        auto* nullable_ele = builder.CreateGEP(builder.getInt1Ty(), nullables_ptr, idx_val);
 
         builder.CreateStore(val.GetValue(&builder), raw_ele_ptr);
         builder.CreateStore(val.GetIsNull(&builder), nullable_ele);

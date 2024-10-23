@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(LLVM_URL https://github.com/llvm/llvm-project/releases/download/llvmorg-9.0.1/llvm-9.0.1.src.tar.xz)
+set(LLVM_URL https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/llvm-project-14.0.6.src.tar.xz)
 message(STATUS "build llvm from ${LLVM_URL}")
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "(arm64)|(ARM64)|(aarch64)|(AARCH64)")
@@ -26,11 +26,11 @@ endif()
 ExternalProject_Add(
   llvm
   URL ${LLVM_URL}
-  URL_HASH SHA256=00a1ee1f389f81e9979f3a640a01c431b3021de0d42278f6508391a2f0b81c9a
+  URL_HASH SHA256=8b3cfd7bc695bd6cea0f37f53f0981f34f87496e79e2529874fd03a2f9dd3a8a
   PREFIX ${DEPS_BUILD_DIR}
   DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/llvm
   INSTALL_DIR ${DEPS_INSTALL_DIR}
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -H<SOURCE_DIR> -B<BINARY_DIR>
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -H<SOURCE_DIR>/llvm -B<BINARY_DIR>
     -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DLLVM_TARGETS_TO_BUILD=${LLVM_TARGETS}
     -DLLVM_ENABLE_Z3_SOLVER=OFF ${CMAKE_OPTS}
   BUILD_COMMAND ${CMAKE_COMMAND} --build . -- ${MAKEOPTS}

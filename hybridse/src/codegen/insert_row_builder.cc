@@ -35,6 +35,7 @@
 #include "node/sql_node.h"
 #include "passes/resolve_fn_and_attrs.h"
 #include "udf/default_udf_library.h"
+#include "vm/jit.h"
 #include "vm/jit_wrapper.h"
 
 namespace hybridse {
@@ -62,15 +63,14 @@ absl::StatusOr<int8_t*> InsertRowBuilder::ComputeRowUnsafe(absl::Span<node::Expr
         return absl::FailedPreconditionError(
             absl::Substitute("invalid expression number, expect $0, but got $1", schema_->size(), values.size()));
     }
-    absl::Cleanup clean = [&]() { fn_counter_++; };
 
     DLOG(INFO) << absl::StrJoin(values, ", ", [](std::string* str, const node::ExprNode* const expr) {
         absl::StrAppend(str, expr->GetExprString());
     });
 
-    std::unique_ptr<llvm::LLVMContext> llvm_ctx = llvm::make_unique<llvm::LLVMContext>();
+    std::unique_ptr<llvm::LLVMContext> llvm_ctx = std::make_unique<llvm::LLVMContext>();
     std::unique_ptr<llvm::Module> llvm_module =
-        llvm::make_unique<llvm::Module>(absl::StrCat("insert_row_builder_", fn_counter_.load()), *llvm_ctx);
+        std ::make_unique<llvm::Module>(jit_->UniqueModuleName("insert_row_builder"), *llvm_ctx);
     vm::SchemasContext empty_sc;
     node::NodeManager nm;
     // WORKAROUND. Set the id counter to the max of all input expr nodes,
@@ -97,7 +97,7 @@ absl::StatusOr<int8_t*> InsertRowBuilder::ComputeRowUnsafe(absl::Span<node::Expr
         transformed.push_back(out);
     }
 
-    std::string fn_name = absl::StrCat("gen_insert_row_", fn_counter_.load());
+    std::string fn_name = absl::StrCat(llvm_module->getName().str(), "_gen_insert_row");
     auto fs = BuildFn(&dump_ctx, fn_name, transformed);
     CHECK_ABSL_STATUSOR(fs);
 
@@ -107,11 +107,19 @@ absl::StatusOr<int8_t*> InsertRowBuilder::ComputeRowUnsafe(absl::Span<node::Expr
         return absl::InternalError("fail to optimize module");
     }
 
-    if (!jit_->AddModule(std::move(llvm_module), std::move(llvm_ctx))) {
-        return absl::InternalError("add llvm module failed");
+    auto srt = jit_->AddRemovableModule(std::move(llvm_module), std::move(llvm_ctx));
+    if (!srt.ok()) {
+        return absl::InternalError(absl::StrCat("add llvm module failed: ", srt.status().ToString()));
     }
+    auto rt = srt.value();
+    absl::Cleanup clean = [&rt]() {
+        auto err = rt->remove();
+        if (err) {
+            LOG(ERROR) << vm::LlvmToString(err);
+        }
+    };
 
-    auto c_fn = jit_->FindFunction(fn->getName());
+    auto c_fn = jit_->FindFunction(fn->getName().str());
     void (*encode)(int8_t**) = reinterpret_cast<void (*)(int8_t**)>(const_cast<int8_t*>(c_fn));
 
     int8_t* insert_row = nullptr;

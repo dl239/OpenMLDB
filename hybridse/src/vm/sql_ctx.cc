@@ -16,6 +16,7 @@
 
 #include "vm/sql_ctx.h"
 
+#include "vm/jit.h"
 // DONT DELETE: unique_ptr requires full specification for underlying type
 #include "zetasql/parser/parser.h"  // IWYU pragma: keep
 
@@ -23,7 +24,14 @@ namespace hybridse {
 namespace vm {
 SqlContext::SqlContext() {}
 
-SqlContext::~SqlContext() {}
+SqlContext::~SqlContext() {
+    if (RT) {
+        auto err = RT->remove();
+        if (err) {
+            LOG(WARNING) << LlvmToString(err);
+        }
+    }
+}
 
 }  // namespace vm
 }  // namespace hybridse

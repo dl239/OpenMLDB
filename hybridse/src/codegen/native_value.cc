@@ -29,7 +29,7 @@ namespace codegen {
     if (IsConstNull()) {
         is_null = ::llvm::ConstantInt::getTrue(builder->getContext());
     } else if (IsMemFlag()) {
-        is_null = builder->CreateLoad(flag_);
+        is_null = builder->CreateLoad(flag_->getType()->getPointerElementType(), flag_);
     } else if (IsRegFlag()) {
         is_null = flag_;
     } else {
@@ -49,7 +49,7 @@ namespace codegen {
     if (IsConstNull()) {
         return ::llvm::UndefValue::get(GetType());
     } else if (IsMem()) {
-        return builder->CreateLoad(raw_);
+        return builder->CreateLoad(raw_->getType()->getPointerElementType(), raw_);
     } else {
         return raw_;
     }
@@ -121,7 +121,7 @@ NativeValue NativeValue::Create(::llvm::Value* raw) {
 NativeValue NativeValue::CreateMem(::llvm::Value* raw) {
     return NativeValue(raw, nullptr,
                        reinterpret_cast<::llvm::PointerType*>(raw->getType())
-                           ->getElementType());
+                           ->getPointerElementType());
 }
 
 NativeValue NativeValue::CreateNull(::llvm::Type* ty) {
@@ -137,7 +137,7 @@ NativeValue NativeValue::CreateMemWithFlag(::llvm::Value* raw,
                                            ::llvm::Value* flag) {
     return NativeValue(raw, flag,
                        reinterpret_cast<::llvm::PointerType*>(raw->getType())
-                           ->getElementType());
+                           ->getPointerElementType());
 }
 
 NativeValue NativeValue::Replace(::llvm::Value* val) const {

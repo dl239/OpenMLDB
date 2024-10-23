@@ -143,7 +143,6 @@ class RowBuilder2 {
 class RowBuilder {
  public:
     explicit RowBuilder(const hybridse::codec::Schema& schema);
-    ~RowBuilder() = default;
     uint32_t CalTotalLength(uint32_t string_length);
     bool SetBuffer(int8_t* buf, uint32_t size);
     bool SetBuffer(int64_t buf_handle, uint32_t size);

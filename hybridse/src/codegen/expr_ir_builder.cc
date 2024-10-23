@@ -391,7 +391,7 @@ Status ExprIRBuilder::BuildCallFnLegacy(
         CHECK_TRUE(TypeIRBuilder::IsStructPtr(last_arg->getType()), common::kCodegenCallFunctionError,
                    "Incorrect arguments passed")
         ::llvm::Type* struct_type = reinterpret_cast<::llvm::PointerType*>(last_arg->getType())
-                ->getElementType();
+                ->getPointerElementType();
         ::llvm::Value* struct_value =
             CreateAllocaAtHead(&builder, struct_type, "struct_alloca");
         llvm_args.push_back(struct_value);
@@ -463,7 +463,7 @@ Status ExprIRBuilder::BuildWindow(NativeValue* output) {  // NOLINT
     // ListRef* { int8_t* } -> int8_t**
     ::llvm::Value* list_ref_ptr = window_ptr_value.GetValue(&builder);
     list_ref_ptr = builder.CreatePointerCast(list_ref_ptr, builder.getInt8PtrTy()->getPointerTo());
-    ::llvm::Value* list_ptr = builder.CreateLoad(list_ref_ptr);
+    ::llvm::Value* list_ptr = builder.CreateLoad(builder.getInt8PtrTy(), list_ref_ptr);
 
     MemoryWindowDecodeIRBuilder window_ir_builder(ctx_->schemas_context(), ctx_->GetCurrentBlock());
     if (frame_->frame_range() != nullptr) {

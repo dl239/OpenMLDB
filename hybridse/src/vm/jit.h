@@ -18,6 +18,9 @@
 #define HYBRIDSE_SRC_VM_JIT_H_
 
 #include <memory>
+#ifdef LLVM_EXT_ENABLE
+#include <map>
+#endif
 #include <string>
 #include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "vm/jit_wrapper.h"
@@ -42,15 +45,7 @@ class HybridSeJit : public ::llvm::orc::LLJIT {
  public:
     void Init();
 
-    ::llvm::Error AddIRModule(::llvm::orc::JITDylib& jd,  // NOLINT
-                              ::llvm::orc::ThreadSafeModule tsm,
-                              ::llvm::orc::VModuleKey key);
-
     bool OptModule(::llvm::Module* m);
-
-    ::llvm::orc::VModuleKey CreateVModule();
-
-    void ReleaseVModule(::llvm::orc::VModuleKey key);
 
     // add to main module
     bool AddSymbol(const std::string& name, void* fn_ptr);
@@ -93,6 +88,8 @@ class HybridSeLlvmJitWrapper : public HybridSeJitWrapper {
     bool OptModule(::llvm::Module* module) override;
 
     bool AddModule(std::unique_ptr<llvm::Module> module, std::unique_ptr<llvm::LLVMContext> llvm_ctx) override;
+    absl::StatusOr<llvm::orc::ResourceTrackerSP> AddRemovableModule(std::unique_ptr<llvm::Module> module,
+                                                                  std::unique_ptr<llvm::LLVMContext> llvm_ctx) override;
 
     bool AddExternalFunction(const std::string& name, void* addr) override;
 

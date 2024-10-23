@@ -265,7 +265,7 @@ class StatisticalAggGenerator {
 
     void GenSumUpdate(size_t i, ::llvm::Value* input, ::llvm::Value* is_null,
                       ::llvm::IRBuilder<>* builder) {
-        ::llvm::Value* accum = builder->CreateLoad(sum_states_[i]);
+        ::llvm::Value* accum = builder->CreateLoad(sum_states_[i]->getType()->getPointerElementType(), sum_states_[i]);
         ::llvm::Value* add;
         if (input->getType()->isIntegerTy()) {
             add = builder->CreateAdd(accum, input);
@@ -278,7 +278,7 @@ class StatisticalAggGenerator {
 
     void GenAvgUpdate(size_t i, ::llvm::Value* input, ::llvm::Value* is_null,
                       ::llvm::IRBuilder<>* builder) {
-        ::llvm::Value* accum = builder->CreateLoad(avg_states_[i]);
+        ::llvm::Value* accum = builder->CreateLoad(avg_states_[i]->getType()->getPointerElementType(), avg_states_[i]);
         if (input->getType()->isIntegerTy()) {
             input = builder->CreateSIToFP(input, accum->getType());
         } else {
@@ -291,8 +291,8 @@ class StatisticalAggGenerator {
 
     void GenCountUpdate(size_t i, ::llvm::Value* is_null, ::llvm::IRBuilder<>* builder) {
         ::llvm::Value* one = ::llvm::ConstantInt::get(
-            reinterpret_cast<::llvm::PointerType*>(count_state_[i]->getType())->getElementType(), 1, true);
-        ::llvm::Value* cnt = builder->CreateLoad(count_state_[i]);
+            reinterpret_cast<::llvm::PointerType*>(count_state_[i]->getType())->getPointerElementType(), 1, true);
+        ::llvm::Value* cnt = builder->CreateLoad(count_state_[i]->getType()->getPointerElementType(), count_state_[i]);
         ::llvm::Value* new_cnt = builder->CreateAdd(cnt, one);
         new_cnt = builder->CreateSelect(is_null, cnt, new_cnt);
         builder->CreateStore(new_cnt, count_state_[i]);
@@ -300,7 +300,7 @@ class StatisticalAggGenerator {
 
     void GenMinUpdate(size_t i, ::llvm::Value* input, ::llvm::Value* is_null,
                       ::llvm::IRBuilder<>* builder) {
-        ::llvm::Value* accum = builder->CreateLoad(min_states_[i]);
+        ::llvm::Value* accum = builder->CreateLoad(min_states_[i]->getType()->getPointerElementType(), min_states_[i]);
         ::llvm::Type* min_ty = accum->getType();
         ::llvm::Value* cmp;
         if (min_ty->isIntegerTy()) {
@@ -315,7 +315,7 @@ class StatisticalAggGenerator {
 
     void GenMaxUpdate(size_t i, ::llvm::Value* input, ::llvm::Value* is_null,
                       ::llvm::IRBuilder<>* builder) {
-        ::llvm::Value* accum = builder->CreateLoad(max_states_[i]);
+        ::llvm::Value* accum = builder->CreateLoad(max_states_[i]->getType()->getPointerElementType(), max_states_[i]);
         ::llvm::Type* max_ty = accum->getType();
         ::llvm::Value* cmp;
         if (max_ty->isIntegerTy()) {
@@ -351,11 +351,13 @@ class StatisticalAggGenerator {
     void GenOutputs(::llvm::IRBuilder<>* builder, std::vector<std::pair<size_t, NativeValue>>* outputs) {
         for (size_t i = 0; i < col_num_; ++i) {
             // cnt always exists
-            ::llvm::Value* cnt = builder->CreateLoad(count_state_[i]);
+            ::llvm::Value* cnt =
+                builder->CreateLoad(count_state_[i]->getType()->getPointerElementType(), count_state_[i]);
             ::llvm::Value* is_empty = builder->CreateICmpEQ(cnt, builder->getInt64(0));
 
             if (!sum_idxs_[i].empty()) {
-                ::llvm::Value* accum = builder->CreateLoad(sum_states_[i]);
+                ::llvm::Value* accum =
+                    builder->CreateLoad(sum_states_[i]->getType()->getPointerElementType(), sum_states_[i]);
                 for (int idx : sum_idxs_[i]) {
                     outputs->emplace_back(idx, NativeValue::CreateWithFlag(accum, is_empty));
                 }
@@ -365,9 +367,9 @@ class StatisticalAggGenerator {
                 ::llvm::Type* avg_ty = AggregateIRBuilder::GetOutputLlvmType(builder->getContext(), "avg", col_type_);
                 ::llvm::Value* sum;
                 if (avg_states_[i] == nullptr) {
-                    sum = builder->CreateLoad(sum_states_[i]);
+                    sum = builder->CreateLoad(sum_states_[i]->getType()->getPointerElementType(), sum_states_[i]);
                 } else {
-                    sum = builder->CreateLoad(avg_states_[i]);
+                    sum = builder->CreateLoad(avg_states_[i]->getType()->getPointerElementType(), avg_states_[i]);
                 }
                 ::llvm::Value* raw_avg = builder->CreateFDiv(sum, builder->CreateSIToFP(cnt, avg_ty));
                 for (int idx : avg_idxs_[i]) {
@@ -382,14 +384,16 @@ class StatisticalAggGenerator {
             }
 
             if (!min_idxs_[i].empty()) {
-                ::llvm::Value* accum = builder->CreateLoad(min_states_[i]);
+                ::llvm::Value* accum =
+                    builder->CreateLoad(min_states_[i]->getType()->getPointerElementType(), min_states_[i]);
                 for (int idx : min_idxs_[i]) {
                     outputs->emplace_back(idx, NativeValue::CreateWithFlag(accum, is_empty));
                 }
             }
 
             if (!max_idxs_[i].empty()) {
-                ::llvm::Value* accum = builder->CreateLoad(max_states_[i]);
+                ::llvm::Value* accum =
+                    builder->CreateLoad(max_states_[i]->getType()->getPointerElementType(), max_states_[i]);
                 for (int idx : max_idxs_[i]) {
                     outputs->emplace_back(idx, NativeValue::CreateWithFlag(accum, is_empty));
                 }
@@ -598,9 +602,9 @@ base::Status AggregateIRBuilder::BuildMulti(const std::string& base_funcname,
     ::llvm::Function* fn = ::llvm::Function::Create(
         fnt, llvm::Function::ExternalLinkage, fn_name, module_);
     BlockGuard bg0(cur_block, &ctx);
-    builder.CreateCall(
-        module_->getOrInsertFunction(fn_name, fnt),
-        {window_ptr.GetValue(&builder), builder.CreateLoad(output_buf)});
+    builder.CreateCall(module_->getOrInsertFunction(fn_name, fnt),
+                       {window_ptr.GetValue(&builder),
+                        builder.CreateLoad(output_buf->getType()->getPointerElementType(), output_buf)});
 
     ::llvm::BasicBlock* head_block =
         ::llvm::BasicBlock::Create(llvm_ctx, "head", fn);

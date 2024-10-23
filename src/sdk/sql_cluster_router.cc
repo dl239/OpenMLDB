@@ -481,11 +481,13 @@ bool SQLClusterRouter::GetMultiRowInsertInfo(const std::string& db, const std::s
     // 1. default value from table definition
     // 2. parameters
     ::hybridse::vm::Engine::InitializeGlobalLLVM();
-    auto jit = std::shared_ptr<hybridse::vm::HybridSeJitWrapper>(hybridse::vm::HybridSeJitWrapper::Create());
-    if (!jit->Init()) {
+    auto jit_rs = hybridse::vm::GlobalJIT();
+    if (!jit_rs.ok()) {
+        LOG(WARNING) << jit_rs.status();
         return false;
     }
-    ::hybridse::codegen::InsertRowBuilder insert_builder(jit.get(), &sc);
+    auto jit = jit_rs.value();
+    ::hybridse::codegen::InsertRowBuilder insert_builder(jit, &sc);
 
     size_t total_rows_size = insert_stmt->values_.size();
     for (size_t i = 0; i < total_rows_size; i++) {
@@ -3450,13 +3452,15 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
             auto sc = std::dynamic_pointer_cast<hybridse::sdk::SchemaImpl>(req->GetSchema());
             ::hybridse::vm::Engine::InitializeGlobalLLVM();
             hybridse::base::Status s;
-            auto jit = std::shared_ptr<hybridse::vm::HybridSeJitWrapper>(
-                hybridse::vm::HybridSeJitWrapper::CreateWithDefaultSymbols(&s));
-            if (!s.isOK()) {
+            auto jit_rs = hybridse::vm::GlobalJIT();
+            if (!jit_rs.ok()) {
+                s.code = hybridse::common::kCodegenError;
+                s.msg = jit_rs.status().ToString();
                 APPEND_FROM_BASE(status, s, "");
                 return {};
             }
-            hybridse::codec::SliceBuilder builder(jit.get(), &sc->GetSchema());
+            auto jit = jit_rs.value();
+            hybridse::codec::SliceBuilder builder(jit, &sc->GetSchema());
             hybridse::base::RefCountedSlice slice;
             s = builder.Build(call->arguments(), &slice);
             if (!s.isOK()) {

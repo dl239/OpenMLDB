@@ -422,11 +422,10 @@ absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const code
             // try build as request schema size = 1, necessary since AST parser simplify '(expr1)' to 'expr1'.
             // this also allows syntax like 'values = [12, 12]', where request table schema is '[int]',
             // it is a special rule to go with AST parser, not recommanded to users generally.
-            base::Status s;
-            auto jit =
-                std::shared_ptr<hybridse::vm::HybridSeJitWrapper>(vm::HybridSeJitWrapper::CreateWithDefaultSymbols(&s));
-            CHECK_STATUS_TO_ABSL(s);
-            codec::RowBuilder2 builder(jit.get(), {*sc});
+            auto rs = vm::GlobalJIT();
+            CHECK_ABSL_STATUSOR(rs);
+            auto jit = rs.value();
+            codec::RowBuilder2 builder(jit, {*sc});
             CHECK_STATUS_TO_ABSL(builder.Init());
             codec::Row r;
             CHECK_STATUS_TO_ABSL(builder.Build({const_cast<node::ExprNode*>(expr)}, &r));

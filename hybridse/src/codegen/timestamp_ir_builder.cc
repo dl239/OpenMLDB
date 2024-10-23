@@ -38,7 +38,7 @@ TimestampIRBuilder::~TimestampIRBuilder() {}
 void TimestampIRBuilder::InitStructType() {
     std::string name = "fe.timestamp";
     ::llvm::StringRef sr(name);
-    ::llvm::StructType* stype = m_->getTypeByName(sr);
+    ::llvm::StructType* stype = llvm::StructType::getTypeByName(m_->getContext(), sr);
     if (stype != NULL) {
         struct_type_ = stype;
         return;
@@ -99,7 +99,7 @@ base::Status TimestampIRBuilder::CastFrom(::llvm::BasicBlock* block,
                                       false));
         builder.CreateCall(cast_func,
                            {src.GetValue(&builder), dist, is_null_ptr});
-        ::llvm::Value* should_return_null = builder.CreateLoad(is_null_ptr);
+        ::llvm::Value* should_return_null = builder.CreateLoad(builder.getInt1Ty(), is_null_ptr);
         null_ir_builder.CheckAnyNull(block, src, &should_return_null);
         *output = NativeValue::CreateWithFlag(dist, should_return_null);
     } else {

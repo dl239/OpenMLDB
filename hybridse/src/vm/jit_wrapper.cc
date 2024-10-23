@@ -50,7 +50,7 @@ static void InitBuiltinJitSymbols(HybridSeJitWrapper* jit_ptr);
 bool HybridSeJitWrapper::AddModuleFromBuffer(const base::RawBuffer& buf) {
     std::string buf_str(buf.addr, buf.size);
     ::llvm::SMDiagnostic diagnostic;
-    auto llvm_ctx = ::llvm::make_unique<::llvm::LLVMContext>();
+    auto llvm_ctx = std::make_unique<::llvm::LLVMContext>();
     auto mem_buf = ::llvm::MemoryBuffer::getMemBuffer(buf_str);
     auto llvm_module = parseIR(*mem_buf, diagnostic, *llvm_ctx);
     if (llvm_module == nullptr) {
@@ -258,6 +258,16 @@ void InitBuiltinJitSymbols(HybridSeJitWrapper* jit) {
     jit->AddExternalFunction("hybridse_array_combine", reinterpret_cast<void*>(&hybridse::udf::v1::array_combine));
     jit->AddExternalFunction("hybridse_alloc_array_string",
                              reinterpret_cast<void*>(&hybridse::udf::v1::AllocManagedArray<codec::StringRef>));
+}
+
+absl::StatusOr<HybridSeJitWrapper*> GlobalJIT(const JitOptions& jit_options) {
+    base::Status s;
+    static HybridSeJitWrapper* jit = HybridSeJitWrapper::CreateWithDefaultSymbols(&s, jit_options);
+    CHECK_STATUS_TO_ABSL(s);
+    if (jit == nullptr) {
+        return absl::InternalError("got nullptr jit");
+    }
+    return jit;
 }
 
 }  // namespace vm

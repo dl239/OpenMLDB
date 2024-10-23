@@ -94,10 +94,8 @@ class SqlCompiler {
  private:
     void KeepIR(SqlContext& ctx, llvm::Module* m);  // NOLINT
 
-    bool ResolvePlanFnAddress(
-        PhysicalOpNode* node,
-        std::shared_ptr<HybridSeJitWrapper>& jit,  // NOLINT
-        Status& status);                           // NOLINT
+    bool ResolvePlanFnAddress(PhysicalOpNode* node, HybridSeJitWrapper* jit,
+                              Status& status);  // NOLINT
 
     Status BuildPhysicalPlan(SqlContext* ctx,
                              const ::hybridse::node::PlanNodeList& plan_list,

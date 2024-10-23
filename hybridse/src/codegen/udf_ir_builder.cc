@@ -299,17 +299,15 @@ Status UdfIRBuilder::ExpandLlvmCallReturnArgs(
                 builder->getInt64(opaque_ret_type->bytes()));
         } else if (TypeIRBuilder::IsStructPtr(llvm_ty)) {
             // Timestamp, Date, String, Array, etc will be struct ptr
-            ret_alloca = CreateAllocaAtHead(
-                builder,
-                reinterpret_cast<llvm::PointerType*>(llvm_ty)->getElementType(),
-                "udf_struct_type_return_addr");
+            auto struct_ty = reinterpret_cast<llvm::PointerType*>(llvm_ty)->getPointerElementType();
+            ret_alloca = CreateAllocaAtHead(builder, struct_ty, "udf_struct_type_return_addr");
             // fill empty content for string
             if (dtype->base() == node::kVarchar) {
                 // empty string
                 builder->CreateStore(builder->getInt32(0),
-                                     builder->CreateStructGEP(ret_alloca, 0));
+                                     builder->CreateStructGEP(struct_ty, ret_alloca, 0));
                 builder->CreateStore(builder->CreateGlobalStringPtr(""),
-                                     builder->CreateStructGEP(ret_alloca, 1));
+                                     builder->CreateStructGEP(struct_ty, ret_alloca, 1));
             }
         } else {
             ret_alloca =
@@ -354,12 +352,12 @@ Status UdfIRBuilder::ExtractLlvmReturnValue(
         } else if (dtype->base() == node::kOpaque) {
             raw = llvm_args[*pos_idx];
         } else {
-            raw = builder->CreateLoad(llvm_args[*pos_idx]);
+            raw = builder->CreateLoad(llvm_ty, llvm_args[*pos_idx]);
         }
         *pos_idx += 1;
 
         if (nullable) {
-            ::llvm::Value* is_null = builder->CreateLoad(llvm_args[*pos_idx]);
+            ::llvm::Value* is_null = builder->CreateLoad(builder->getInt1Ty(), llvm_args[*pos_idx]);
             *pos_idx += 1;
             *output = NativeValue::CreateWithFlag(raw, is_null);
         } else {
@@ -480,10 +478,8 @@ Status UdfIRBuilder::BuildExternCall(
         }
     }
     if (func_ty->getReturnType() == int16_ty) {
-        if (!function->hasAttribute(::llvm::AttributeList::ReturnIndex,
-                                    sext_attr)) {
-            function->addAttribute(::llvm::AttributeList::ReturnIndex,
-                                   sext_attr);
+        if (!function->hasRetAttribute(sext_attr)) {
+            function->addRetAttr(sext_attr);
         }
     }
 
@@ -531,10 +527,8 @@ Status UdfIRBuilder::BuildDynamicUdfCall(
         }
     }
     if (func_ty->getReturnType() == int16_ty) {
-        if (!function->hasAttribute(::llvm::AttributeList::ReturnIndex,
-                                    sext_attr)) {
-            function->addAttribute(::llvm::AttributeList::ReturnIndex,
-                                   sext_attr);
+        if (!function->hasRetAttribute(sext_attr)) {
+            function->addRetAttr(sext_attr);
         }
     }
 
@@ -666,8 +660,7 @@ Status UdfIRBuilder::BuildUdafCall(
                     cur_state_values.push_back(
                         NativeValue::Create(states_storage[i]));
                 } else {
-                    auto load_raw =
-                        ctx_->GetBuilder()->CreateLoad(states_storage[i]);
+                    auto load_raw = ctx_->GetBuilder()->CreateLoad(state_llvm_tys[i], states_storage[i]);
                     cur_state_values.push_back(NativeValue::Create(load_raw));
                 }
             }
@@ -703,14 +696,14 @@ Status UdfIRBuilder::BuildUdafCall(
                     NativeValue sub = update_value.GetField(i);
                     ::llvm::Value* raw_update = sub.GetValue(ctx_);
                     if (TypeIRBuilder::IsStructPtr(raw_update->getType())) {
-                        raw_update = builder.CreateLoad(raw_update);
+                        raw_update = builder.CreateLoad(raw_update->getType()->getPointerElementType(), raw_update);
                     }
                     builder.CreateStore(raw_update, states_storage[i]);
                 }
             } else {
                 ::llvm::Value* raw_update = update_value.GetValue(ctx_);
                 if (TypeIRBuilder::IsStructPtr(raw_update->getType())) {
-                    raw_update = builder.CreateLoad(raw_update);
+                    raw_update = builder.CreateLoad(raw_update->getType()->getPointerElementType(), raw_update);
                 }
                 builder.CreateStore(raw_update, states_storage[0]);
             }
@@ -725,7 +718,7 @@ Status UdfIRBuilder::BuildUdafCall(
                 NativeValue::Create(states_storage[i]));
         } else {
             final_state_values.push_back(
-                NativeValue::Create(builder.CreateLoad(states_storage[i])));
+                NativeValue::Create(builder.CreateLoad(state_llvm_tys[i], states_storage[i])));
         }
     }
     NativeValue single_final_state;

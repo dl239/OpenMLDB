@@ -73,18 +73,6 @@ static void RunDefaultOptPasses(::llvm::Module* m) {
     }
 }
 
-::llvm::Error HybridSeJit::AddIRModule(::llvm::orc::JITDylib& jd,  // NOLINT
-                                       ::llvm::orc::ThreadSafeModule tsm,
-                                       ::llvm::orc::VModuleKey key) {
-    if (auto err = applyDataLayout(*tsm.getModule())) return err;
-    DLOG(INFO) << "add a module with key " << key << " with ins cnt "
-               << tsm.getModule()->getInstructionCount();
-    RunDefaultOptPasses(tsm.getModule());
-    DLOG(INFO) << "after opt with ins cnt "
-               << tsm.getModule()->getInstructionCount();
-    return CompileLayer->add(jd, std::move(tsm), key);
-}
-
 bool HybridSeJit::OptModule(::llvm::Module* m) {
     if (auto err = applyDataLayout(*m)) {
         return false;
@@ -93,17 +81,6 @@ bool HybridSeJit::OptModule(::llvm::Module* m) {
     RunDefaultOptPasses(m);
     DLOG(INFO) << "Module after opt:\n" << LlvmToString(*m);
     return true;
-}
-
-::llvm::orc::VModuleKey HybridSeJit::CreateVModule() {
-    ::llvm::orc::VModuleKey key = ES->allocateVModule();
-    DLOG(INFO) << "allocate a new module key " << key;
-    return key;
-}
-
-void HybridSeJit::ReleaseVModule(::llvm::orc::VModuleKey key) {
-    DLOG(INFO) << "release module with key " << key;
-    ES->releaseVModule(key);
 }
 
 bool HybridSeJit::AddSymbol(::llvm::orc::JITDylib& jd, const std::string& name,
@@ -135,7 +112,7 @@ void HybridSeJit::Init() {
         ::llvm::errs() << err;
         return;
     }
-    jd.setGenerator(gen.get());
+    jd.addGenerator(std::move(gen.get()));
 }
 
 bool HybridSeJit::AddSymbol(::llvm::orc::JITDylib& jd,
@@ -235,6 +212,18 @@ bool HybridSeLlvmJitWrapper::AddModule(
         return false;
     }
     return true;
+}
+absl::StatusOr<llvm::orc::ResourceTrackerSP> HybridSeLlvmJitWrapper::AddRemovableModule(
+    std::unique_ptr<llvm::Module> module, std::unique_ptr<llvm::LLVMContext> llvm_ctx) {
+    EnsureInitialized();
+
+    auto RT = jit_->getMainJITDylib().createResourceTracker();
+
+    ::llvm::Error e = jit_->addIRModule(RT, ::llvm::orc::ThreadSafeModule(std::move(module), std::move(llvm_ctx)));
+    if (e) {
+        return absl::InternalError(absl::StrCat( "fail to add ir module: ", LlvmToString(e)));
+    }
+    return RT;
 }
 
 RawPtrHandle HybridSeLlvmJitWrapper::FindFunction(const std::string& funcname) {

@@ -62,7 +62,6 @@ class InsertRowBuilder {
 
     const codec::Schema* schema_;
     vm::HybridSeJitWrapper* jit_;
-    std::atomic<uint32_t> fn_counter_ = 0;
 };
 }  // namespace codegen
 }  // namespace hybridse

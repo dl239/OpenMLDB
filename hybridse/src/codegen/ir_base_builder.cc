@@ -233,7 +233,7 @@ bool GetLlvmListType(::llvm::Module* m,
         }
     }
     ::llvm::StringRef sr(name);
-    ::llvm::StructType* stype = m->getTypeByName(sr);
+    ::llvm::StructType* stype = llvm::StructType::getTypeByName(m->getContext(), sr);
     if (stype != NULL) {
         *output = stype;
         return true;
@@ -304,7 +304,7 @@ bool GetLlvmIteratorType(::llvm::Module* m,
         }
     }
     ::llvm::StringRef sr(name);
-    ::llvm::StructType* stype = m->getTypeByName(sr);
+    ::llvm::StructType* stype = llvm::StructType::getTypeByName(m->getContext(), sr);
     if (stype != NULL) {
         *output = stype;
         return true;
@@ -390,7 +390,7 @@ bool GetLlvmType(::llvm::Module* m, const hybridse::node::TypeNode* data_type,
         case hybridse::node::kTuple: {
             std::string name = absl::StrCat("fe.", data_type->GetName());
             ::llvm::StringRef sr(name);
-            ::llvm::StructType* stype = m->getTypeByName(sr);
+            ::llvm::StructType* stype = llvm::StructType::getTypeByName(m->getContext(), sr);
             if (stype != nullptr) {
                 *llvm_type = stype;
                 return true;
@@ -473,7 +473,7 @@ bool GetFullType(node::NodeManager* nm, ::llvm::Type* type,
         case hybridse::node::kList: {
             if (type->getTypeID() == ::llvm::Type::PointerTyID) {
                 type = reinterpret_cast<::llvm::PointerType*>(type)
-                           ->getElementType();
+                           ->getPointerElementType();
             }
             if (type->getStructName().equals("fe.list_ref_int16")) {
                 *type_node = nm->MakeTypeNode(
@@ -519,7 +519,7 @@ bool GetFullType(node::NodeManager* nm, ::llvm::Type* type,
         case hybridse::node::kIterator: {
             if (type->getTypeID() == ::llvm::Type::PointerTyID) {
                 type = reinterpret_cast<::llvm::PointerType*>(type)
-                           ->getElementType();
+                           ->getPointerElementType();
             }
             if (type->getStructName().equals("fe.iterator_ref_int16")) {
                 *type_node = nm->MakeTypeNode(
@@ -664,7 +664,7 @@ bool GetBaseType(::llvm::Type* type, ::hybridse::node::DataType* output) {
         }
         case ::llvm::Type::PointerTyID: {
             auto pointee_ty = reinterpret_cast<::llvm::PointerType*>(type)
-                ->getElementType();
+                ->getPointerElementType();
 
             if (::llvm::Type::StructTyID != pointee_ty->getTypeID()) {
                 LOG(WARNING) << "no mapping pointee_ty for llvm pointee_ty";

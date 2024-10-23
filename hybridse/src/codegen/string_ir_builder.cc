@@ -35,7 +35,7 @@ StringIRBuilder::~StringIRBuilder() {}
 void StringIRBuilder::InitStructType() {
     std::string name = "fe.string_ref";
     ::llvm::StringRef sr(name);
-    ::llvm::StructType* stype = m_->getTypeByName(sr);
+    ::llvm::StructType* stype = llvm::StructType::getTypeByName(m_->getContext(), sr);
     if (stype != NULL) {
         struct_type_ = stype;
         return;
@@ -187,8 +187,8 @@ base::Status StringIRBuilder::CastToNumber(::llvm::BasicBlock* block,
                                   false));
     builder.CreateCall(cast_func,
                        {src.GetValue(&builder), dist_ptr, is_null_ptr});
-    ::llvm::Value* should_return_null = builder.CreateLoad(is_null_ptr);
-    ::llvm::Value* dist = builder.CreateLoad(dist_ptr);
+    ::llvm::Value* should_return_null = builder.CreateLoad(builder.getInt1Ty(), is_null_ptr);
+    ::llvm::Value* dist = builder.CreateLoad(type, dist_ptr);
 
     NullIRBuilder null_ir_builder;
     null_ir_builder.CheckAnyNull(block, src, &should_return_null);

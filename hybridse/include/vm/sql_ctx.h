@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "llvm/ExecutionEngine/Orc/Core.h"
 #include "node/node_manager.h"
 #include "vm/engine_context.h"
 
@@ -59,6 +60,7 @@ struct SqlContext {
     // eg using bthead to compile ir
     hybridse::vm::JitOptions jit_options;
     hybridse::vm::HybridSeJitWrapper* jit = nullptr;
+    llvm::orc::ResourceTrackerSP RT;
     Schema schema;
     Schema request_schema;
     std::string request_db_name;

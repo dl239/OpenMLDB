@@ -24,6 +24,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "plan/plan_api.h"
 #include "udf/default_udf_library.h"
+#include "vm/jit_wrapper.h"
 #include "vm/runner.h"
 #include "vm/runner_builder.h"
 #include "vm/transform.h"
@@ -72,8 +73,16 @@ bool SqlCompiler::Compile(SqlContext& ctx, Status& status) {  // NOLINT
         ctx.logical_plan[0]->Print(logical_plan_ss, "\t");
         ctx.logical_plan_str = logical_plan_ss.str();
     }
-    auto llvm_ctx = ::llvm::make_unique<::llvm::LLVMContext>();
-    auto m = ::llvm::make_unique<::llvm::Module>("sql", *llvm_ctx);
+    auto jit_rs = vm::GlobalJIT(ctx.jit_options);
+    if (!jit_rs.ok()) {
+        status = {common::kCodegenError, jit_rs.status().ToString()};
+        LOG(WARNING) << status;
+        return false;
+    }
+    auto jit = jit_rs.value();
+
+    auto llvm_ctx = std::make_unique<::llvm::LLVMContext>();
+    auto m = std::make_unique<::llvm::Module>(jit->UniqueModuleName("sql"), *llvm_ctx);
     ctx.udf_library = udf::DefaultUdfLibrary::get();
 
     status = BuildPhysicalPlan(&ctx, ctx.logical_plan, m.get(), &ctx.physical_plan);
@@ -108,12 +117,6 @@ bool SqlCompiler::Compile(SqlContext& ctx, Status& status) {  // NOLINT
         m->print(::llvm::errs(), NULL, true, true);
         return false;
     }
-    auto jit = std::shared_ptr<HybridSeJitWrapper>(
-        HybridSeJitWrapper::CreateWithDefaultSymbols(ctx.udf_library, &status, ctx.jit_options));
-    if (!status.isOK()) {
-        LOG(WARNING) << status;
-        return false;
-    }
     if (!jit->OptModule(m.get())) {
         LOG(WARNING) << "fail to opt ir module for sql " << ctx.sql;
         return false;
@@ -121,10 +124,13 @@ bool SqlCompiler::Compile(SqlContext& ctx, Status& status) {  // NOLINT
     if (keep_ir_) {
         KeepIR(ctx, m.get());
     }
-    if (!jit->AddModule(std::move(m), std::move(llvm_ctx))) {
-        LOG(WARNING) << "fail to add ir module  for sql " << ctx.sql;
+    auto rs = jit->AddRemovableModule(std::move(m), std::move(llvm_ctx));
+    if (!rs.ok()) {
+        LOG(WARNING) << "fail to add ir module for sql " << ctx.sql << rs.status().ToString();
         return false;
     }
+    ctx.RT = rs.value();
+
     if (!ResolvePlanFnAddress(ctx.physical_plan, jit, status)) {
         return false;
     }
@@ -303,9 +309,7 @@ bool SqlCompiler::Parse(SqlContext& ctx,
     }
     return true;
 }
-bool SqlCompiler::ResolvePlanFnAddress(vm::PhysicalOpNode* node,
-                                       std::shared_ptr<HybridSeJitWrapper>& jit,
-                                       Status& status) {
+bool SqlCompiler::ResolvePlanFnAddress(vm::PhysicalOpNode* node, HybridSeJitWrapper* jit, Status& status) {
     if (nullptr == node) {
         status.msg = "fail to resolve project fn address: node is null";
     }
