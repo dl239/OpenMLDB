@@ -64,9 +64,9 @@ class HybridSeJit : public ::llvm::orc::LLJIT {
 };
 
 class HybridSeJitBuilder
-    : public ::llvm::orc::LLJITBuilderState,
-      public ::llvm::orc::LLJITBuilderSetters<HybridSeJit, HybridSeJitBuilder,
-                                              ::llvm::orc::LLJITBuilderState> {
+    : public ::llvm::orc::LLLazyJITBuilderState,
+      public ::llvm::orc::LLLazyJITBuilderSetters<HybridSeJit, HybridSeJitBuilder,
+                                              ::llvm::orc::LLLazyJITBuilderState> {
 };
 
 template <typename T>

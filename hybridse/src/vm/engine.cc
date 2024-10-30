@@ -48,7 +48,7 @@ EngineOptions::EngineOptions()
       enable_expr_optimize_(true),
       enable_batch_window_parallelization_(false),
       enable_window_column_pruning_(false),
-      max_sql_cache_size_(1100) {
+      max_sql_cache_size_(50) {
 }
 
 static absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const codec::Schema* sc,
@@ -168,7 +168,6 @@ bool Engine::Get(const std::string& sql, const std::string& db, RunSession& sess
     sql_context.enable_batch_window_parallelization = options_.IsEnableBatchWindowParallelization();
     sql_context.enable_window_column_pruning = options_.IsEnableWindowColumnPruning();
     sql_context.enable_expr_optimize = options_.IsEnableExprOptimize();
-    sql_context.jit_options = options_.jit_options();
     sql_context.options = session.GetOptions();
     sql_context.index_hints = session.index_hints_;
     if (session.engine_mode() == kBatchMode) {
@@ -324,7 +323,7 @@ bool Engine::Explain(const std::string& sql, const std::string& db, EngineMode e
 }
 
 void Engine::ClearCacheLocked(const std::string& db) {
-    std::lock_guard<base::SpinMutex> lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     if (db.empty()) {
         lru_cache_.clear();
         return;
@@ -341,22 +340,29 @@ EngineOptions Engine::GetEngineOptions() {
 
 std::shared_ptr<CompileInfo> Engine::GetCacheLocked(const std::string& db, const std::string& sql,
                                                     EngineMode engine_mode) {
-    std::lock_guard<base::SpinMutex> lock(mu_);
-    // Check mode
-    auto mode_iter = lru_cache_.find(engine_mode);
-    if (mode_iter == lru_cache_.end()) {
-        return nullptr;
+    BoostLRU* lru = nullptr;
+    {
+        absl::ReaderMutexLock l(&mu_);
+        // Check mode
+        auto mode_iter = lru_cache_.find(engine_mode);
+        if (mode_iter == lru_cache_.end()) {
+            return nullptr;
+        }
+        auto& mode_cache = mode_iter->second;
+        // Check db
+        auto db_iter = mode_cache.find(db);
+        if (db_iter == mode_cache.end()) {
+            return nullptr;
+        }
+        lru = &db_iter->second;
+        if (!lru->contains(sql)) {
+            return nullptr;
+        }
     }
-    auto& mode_cache = mode_iter->second;
-    // Check db
-    auto db_iter = mode_cache.find(db);
-    if (db_iter == mode_cache.end()) {
-        return nullptr;
-    }
-    auto& lru = db_iter->second;
 
     // Check SQL
-    auto value = lru.get(sql);
+    absl::WriterMutexLock l(&mu_);
+    auto value = lru->get(sql);
     if (value == boost::none) {
         return nullptr;
     } else {
@@ -366,10 +372,9 @@ std::shared_ptr<CompileInfo> Engine::GetCacheLocked(const std::string& db, const
 
 bool Engine::SetCacheLocked(const std::string& db, const std::string& sql, EngineMode engine_mode,
                             std::shared_ptr<CompileInfo> info) {
-    std::lock_guard<base::SpinMutex> lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
 
     auto& mode_cache = lru_cache_[engine_mode];
-    using BoostLRU = boost::compute::detail::lru_cache<std::string, std::shared_ptr<CompileInfo>>;
     auto db_iter = mode_cache.find(db);
     if (db_iter == mode_cache.end()) {
         db_iter = mode_cache.insert(db_iter, {db, BoostLRU(options_.GetMaxSqlCacheSize())});
@@ -401,6 +406,7 @@ absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const code
             auto struct_expr = expr->GetAsOrNull<node::StructCtorWithParens>();
             base::Status s;
             auto jit = ctx->jit;
+            assert(jit);
             codec::RowBuilder2 builder(jit, {*sc});
             CHECK_STATUS_TO_ABSL(builder.Init());
             codec::Row r;
@@ -422,9 +428,8 @@ absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const code
             // try build as request schema size = 1, necessary since AST parser simplify '(expr1)' to 'expr1'.
             // this also allows syntax like 'values = [12, 12]', where request table schema is '[int]',
             // it is a special rule to go with AST parser, not recommanded to users generally.
-            auto rs = vm::GlobalJIT();
-            CHECK_ABSL_STATUSOR(rs);
-            auto jit = rs.value();
+            auto jit = ctx->jit;
+            assert(jit);
             codec::RowBuilder2 builder(jit, {*sc});
             CHECK_STATUS_TO_ABSL(builder.Init());
             codec::Row r;
@@ -439,10 +444,12 @@ absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const code
 absl::Status Engine::ExtractRequestRowsInSQL(SqlContext* sql_ctx) {
     if ((sql_ctx->engine_mode == kRequestMode || sql_ctx->engine_mode == kBatchRequestMode) &&
         !sql_ctx->request_schema.empty() && sql_ctx->request_expressions != nullptr) {
-        // extract rows if request table and request values expression both exists
-        vm::Engine::InitializeGlobalLLVM();
-        CHECK_ABSL_STATUS(
-            ExtractRows(sql_ctx, sql_ctx->request_expressions, &sql_ctx->request_schema, &sql_ctx->request_rows));
+        if (sql_ctx->request_rows.empty()) {
+            // extract rows if request table and request values expression both exists
+            vm::Engine::InitializeGlobalLLVM();
+            CHECK_ABSL_STATUS(
+                ExtractRows(sql_ctx, sql_ctx->request_expressions, &sql_ctx->request_schema, &sql_ctx->request_rows));
+        }
     }
     return absl::OkStatus();
 }

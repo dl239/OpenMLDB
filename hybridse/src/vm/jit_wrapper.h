@@ -91,7 +91,7 @@ class HybridSeJitWrapper {
     bool initialized_ = false;
 };
 
-absl::StatusOr<HybridSeJitWrapper*> GlobalJIT(const JitOptions& jit_options = {});
+HybridSeJitWrapper* GlobalJIT();
 
 }  // namespace vm
 }  // namespace hybridse

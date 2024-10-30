@@ -481,12 +481,7 @@ bool SQLClusterRouter::GetMultiRowInsertInfo(const std::string& db, const std::s
     // 1. default value from table definition
     // 2. parameters
     ::hybridse::vm::Engine::InitializeGlobalLLVM();
-    auto jit_rs = hybridse::vm::GlobalJIT();
-    if (!jit_rs.ok()) {
-        LOG(WARNING) << jit_rs.status();
-        return false;
-    }
-    auto jit = jit_rs.value();
+    auto jit = hybridse::vm::GlobalJIT();
     ::hybridse::codegen::InsertRowBuilder insert_builder(jit, &sc);
 
     size_t total_rows_size = insert_stmt->values_.size();
@@ -3452,14 +3447,7 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
             auto sc = std::dynamic_pointer_cast<hybridse::sdk::SchemaImpl>(req->GetSchema());
             ::hybridse::vm::Engine::InitializeGlobalLLVM();
             hybridse::base::Status s;
-            auto jit_rs = hybridse::vm::GlobalJIT();
-            if (!jit_rs.ok()) {
-                s.code = hybridse::common::kCodegenError;
-                s.msg = jit_rs.status().ToString();
-                APPEND_FROM_BASE(status, s, "");
-                return {};
-            }
-            auto jit = jit_rs.value();
+            auto jit = hybridse::vm::GlobalJIT();
             hybridse::codec::SliceBuilder builder(jit, &sc->GetSchema());
             hybridse::base::RefCountedSlice slice;
             s = builder.Build(call->arguments(), &slice);

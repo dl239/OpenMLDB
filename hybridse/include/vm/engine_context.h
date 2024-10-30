@@ -83,14 +83,15 @@ class CompileInfo {
     virtual void DumpClusterJob(std::ostream& output, const std::string& tab) = 0;
 };
 
+using BoostLRU = boost::compute::detail::lru_cache<std::string, std::shared_ptr<CompileInfo>>;
+
 /// @typedef EngineLRUCache
 /// - EngineMode
 ///     - DB name
 ///       - SQL string
 ///           - CompileInfo
 typedef std::map<EngineMode,
-        std::map<std::string,
-        boost::compute::detail::lru_cache<std::string, std::shared_ptr<CompileInfo>>>>
+        std::map<std::string, BoostLRU>>
     EngineLRUCache;
 
 class CompileInfoCache {
@@ -124,6 +125,9 @@ class JitOptions {
     bool enable_vtune_ = false;
     bool enable_gdb_ = false;
     bool enable_perf_ = false;
+
+ public:
+    unsigned threads_ = 0;
 };
 }  // namespace vm
 }  // namespace hybridse

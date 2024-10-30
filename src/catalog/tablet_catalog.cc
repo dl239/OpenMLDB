@@ -619,7 +619,7 @@ std::unique_ptr<::hybridse::vm::RowIterator> TabletSegmentHandler::GetIterator()
         DLOG(INFO) << "seek to pk " << key_;
         iter->Seek(key_);
         if (iter->Valid() && 0 == iter->GetKey().compare(hybridse::codec::Row(key_))) {
-            return std::move(iter->GetValue());
+            return iter->GetValue();
         } else {
             return std::unique_ptr<::hybridse::vm::RowIterator>();
         }

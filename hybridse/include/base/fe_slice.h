@@ -154,16 +154,16 @@ class RefCountedSlice : public Slice {
  private:
     RefCountedSlice(int8_t *data, size_t size, bool managed)
         : Slice(reinterpret_cast<const char *>(data), size),
-          ref_cnt_(managed ? new int(1) : nullptr) {}
+          ref_cnt_(managed ? new std::atomic<int32_t>(1) : nullptr) {}
 
     RefCountedSlice(const char *data, size_t size, bool managed)
-        : Slice(data, size), ref_cnt_(managed ? new int(1) : nullptr) {}
+        : Slice(data, size), ref_cnt_(managed ? new std::atomic<int32_t>(1) : nullptr) {}
 
     void Release();
 
     void Update(const RefCountedSlice &slice);
 
-    int32_t *ref_cnt_;
+    std::atomic<int32_t> *ref_cnt_;
 };
 
 }  // namespace base

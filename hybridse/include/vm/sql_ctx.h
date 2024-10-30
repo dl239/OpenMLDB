@@ -58,9 +58,8 @@ struct SqlContext {
     std::shared_ptr<hybridse::vm::ClusterJob> cluster_job;
     // TODO(wangtaize) add a light jit engine
     // eg using bthead to compile ir
-    hybridse::vm::JitOptions jit_options;
     hybridse::vm::HybridSeJitWrapper* jit = nullptr;
-    llvm::orc::ResourceTrackerSP RT;
+    llvm::orc::ResourceTrackerSP RT = nullptr;
     Schema schema;
     Schema request_schema;
     std::string request_db_name;

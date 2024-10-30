@@ -56,7 +56,7 @@ class InsertRowBuilder {
     // build the function the will output the row from single insert values
     //
     // the function is just equivalent to C: `void fn(int8_t**)`.
-    // BuildFn returns different function with different name on every invocation
+    // if function with expected signature already exists in target module, returns existing function
     absl::StatusOr<llvm::Function*> BuildFn(CodeGenContext* ctx, llvm::StringRef fn_name,
                                             absl::Span<node::ExprNode* const>);
 

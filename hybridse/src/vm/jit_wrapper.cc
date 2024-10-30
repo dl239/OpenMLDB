@@ -18,29 +18,22 @@
 #include <string>
 #include <utility>
 
-#include "base/cartesian_product.h"
+#include "absl/cleanup/cleanup.h"
 #include "glog/logging.h"
-#include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/Core.h"
-#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/ExecutionEngine/Orc/IRTransformLayer.h"
-#include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
-#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Transforms/InstCombine/InstCombine.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Scalar/GVN.h"
-#include "llvm/Transforms/Utils.h"
 #include "udf/default_udf_library.h"
 #include "udf/udf.h"
 #include "vm/jit.h"
+
+DECLARE_bool(jit_enable_mcjit);
+DECLARE_bool(jit_enable_vtune);
+DECLARE_bool(jit_enable_gdb);
+DECLARE_bool(jit_enable_perf);
+DECLARE_int32(jit_threads);
 
 namespace hybridse {
 namespace vm {
@@ -260,13 +253,31 @@ void InitBuiltinJitSymbols(HybridSeJitWrapper* jit) {
                              reinterpret_cast<void*>(&hybridse::udf::v1::AllocManagedArray<codec::StringRef>));
 }
 
-absl::StatusOr<HybridSeJitWrapper*> GlobalJIT(const JitOptions& jit_options) {
+static HybridSeJitWrapper* CreateGlobalJIT() {
+    absl::Time begin = absl::Now();
+    absl::Cleanup clean = [&]() { LOG(INFO) << "Created JIT in " << absl::Now() - begin; };
+
+    JitOptions jit_options;
+    jit_options.threads_ = FLAGS_jit_threads;
+    jit_options.SetEnableGdb(FLAGS_jit_enable_gdb);
+    jit_options.SetEnableMcjit(FLAGS_jit_enable_mcjit);
+    jit_options.SetEnableVtune(FLAGS_jit_enable_vtune);
+    jit_options.SetEnablePerf(FLAGS_jit_enable_perf);
+
     base::Status s;
-    thread_local static HybridSeJitWrapper* jit = HybridSeJitWrapper::CreateWithDefaultSymbols(&s, jit_options);
-    CHECK_STATUS_TO_ABSL(s);
-    if (jit == nullptr) {
-        return absl::InternalError("got nullptr jit");
+    HybridSeJitWrapper* jit = HybridSeJitWrapper::CreateWithDefaultSymbols(&s, jit_options);
+    if (!s.isOK()) {
+        LOG(ERROR) << s;
+        return nullptr;
     }
+    if (jit == nullptr) {
+        LOG(ERROR) << "null jit instance";
+    }
+    return jit;
+}
+
+HybridSeJitWrapper* GlobalJIT() {
+    static HybridSeJitWrapper* jit = CreateGlobalJIT();
     return jit;
 }
 

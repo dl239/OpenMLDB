@@ -24,7 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/spin_lock.h"
 #include "codec/fe_row_codec.h"
 #include "vm/catalog.h"
 #include "vm/engine_context.h"
@@ -115,9 +114,6 @@ class EngineOptions {
     /// Return the maximum number of entries we can hold for compiling cache.
     inline uint32_t GetMaxSqlCacheSize() const { return max_sql_cache_size_; }
 
-    /// Return JitOptions
-    inline hybridse::vm::JitOptions& jit_options() { return jit_options_; }
-
  private:
     bool keep_ir_;
     bool compile_only_;
@@ -128,7 +124,6 @@ class EngineOptions {
     bool enable_batch_window_parallelization_;
     bool enable_window_column_pruning_;
     uint32_t max_sql_cache_size_;
-    JitOptions jit_options_;
 };
 
 /// \brief A RunSession maintain SQL running context, including compile information, procedure name.
@@ -452,7 +447,7 @@ class Engine {
                  ExplainOutput* explain_output, base::Status* status);
     std::shared_ptr<Catalog> cl_;
     EngineOptions options_;
-    base::SpinMutex mu_;
+    absl::Mutex mu_;
     EngineLRUCache lru_cache_;
 };
 

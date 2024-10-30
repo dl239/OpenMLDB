@@ -73,11 +73,6 @@ int RunSingle(const std::string& yaml_path) {
     options.SetClusterOptimized(absl::EqualsIgnoreCase(FLAGS_cluster_mode, "cluster"));
     options.SetBatchRequestOptimized(FLAGS_enable_batch_request_opt);
     options.SetEnableExprOptimize(FLAGS_enable_expr_opt);
-    JitOptions& jit_options = options.jit_options();
-    jit_options.SetEnableMcjit(FLAGS_enable_mcjit);
-    jit_options.SetEnableVtune(FLAGS_enable_vtune);
-    jit_options.SetEnableGdb(FLAGS_enable_gdb);
-    jit_options.SetEnablePerf(FLAGS_enable_perf);
 
     for (auto& sql_case : cases) {
         if (!FLAGS_case_id.empty() && FLAGS_case_id != sql_case.id()) {

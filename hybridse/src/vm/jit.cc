@@ -29,6 +29,7 @@ extern "C" {
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
+#include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
@@ -169,6 +170,7 @@ bool HybridSeLlvmJitWrapper::Init() {
         //         return ObjLinkingLayer;
         //     });
     }
+    builder.setNumCompileThreads(jit_options_.threads_);
     auto jit = builder.create();
     {
         ::llvm::Error e = jit.takeError();
@@ -237,7 +239,7 @@ RawPtrHandle HybridSeLlvmJitWrapper::FindFunction(const std::string& funcname) {
                      << LlvmToString(e);
         return 0;
     }
-    return reinterpret_cast<const int8_t*>(symbol->getAddress());
+    return reinterpret_cast<RawPtrHandle>(symbol->getAddress());
 }
 
 bool HybridSeLlvmJitWrapper::AddExternalFunction(const std::string& name,

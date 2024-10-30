@@ -163,6 +163,12 @@ absl::StatusOr<llvm::Function*> InsertRowBuilder::BuildFn(CodeGenContext* ctx, l
         CHECK_STATUS_TO_ABSL(encode_builder.BuildEncode(row_ptr_ptr));
 
         builder->CreateRetVoid();
+    } else {
+        auto fn_type = fn->getFunctionType();
+        if (fn_type->getNumParams() != 1 || !fn_type->getParamType(0)->isPointerTy()) {
+            return absl::InternalError(
+                absl::StrCat("insert row function with invalid function signature exists, expecting 'void (int8_t*)'"));
+        }
     }
 
     return fn;

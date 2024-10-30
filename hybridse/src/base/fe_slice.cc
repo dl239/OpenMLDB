@@ -15,6 +15,7 @@
  */
 
 #include "base/fe_slice.h"
+#include <atomic>
 
 namespace hybridse {
 namespace base {
@@ -23,10 +24,9 @@ RefCountedSlice::~RefCountedSlice() { Release(); }
 
 void RefCountedSlice::Release() {
     if (this->ref_cnt_ != nullptr) {
-        auto& cnt = *this->ref_cnt_;
-        cnt -= 1;
-        if (cnt == 0 && buf() != nullptr) {
-            // memset in case the buf is still used after free
+        if (std::atomic_fetch_add_explicit(ref_cnt_, -1, std::memory_order_release) == 1) {
+            std::atomic_thread_fence(std::memory_order_acquire);
+            assert(buf());
             memset(buf(), 0, size());
             free(buf());
             delete this->ref_cnt_;
@@ -38,7 +38,7 @@ void RefCountedSlice::Update(const RefCountedSlice& slice) {
     reset(slice.data(), slice.size());
     this->ref_cnt_ = slice.ref_cnt_;
     if (this->ref_cnt_ != nullptr) {
-        (*this->ref_cnt_) += 1;
+        std::atomic_fetch_add_explicit(ref_cnt_, 1, std::memory_order_relaxed);
     }
 }
 
