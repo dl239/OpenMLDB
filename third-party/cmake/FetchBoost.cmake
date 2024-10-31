@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(BOOST_URL https://boostorg.jfrog.io/artifactory/main/release/1.69.0/source/boost_1_69_0.tar.gz)
+set(BOOST_URL https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz)
 
 message(STATUS "build boost from ${BOOST_URL}")
 
@@ -24,7 +24,7 @@ endif()
 ExternalProject_Add(
   boost
   URL ${BOOST_URL}
-  URL_HASH SHA256=9a2c2819310839ea373f42d69e733c339b4e9a19deab6bfec448281554aa4dbb
+  URL_HASH SHA256=2575e74ffc3ef1cd0babac2c1ee8bdb5782a0ee672b1912da40e5b4b591ca01f
   PREFIX ${DEPS_BUILD_DIR}
   DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/boost
   INSTALL_DIR ${DEPS_INSTALL_DIR}

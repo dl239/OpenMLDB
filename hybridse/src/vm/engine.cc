@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/time/clock.h"
 #include "boost/none.hpp"
 #include "codec/fe_row_codec.h"
@@ -114,8 +115,9 @@ bool Engine::IsCompatibleCache(RunSession& session,  // NOLINT
         return false;
     }
     auto& cache_ctx = std::dynamic_pointer_cast<SqlCompileInfo>(info)->get_sql_context();
+    auto mode = info->GetEngineMode();
 
-    if (session.engine_mode() == kBatchMode) {
+    if (mode == kBatchMode) {
         auto batch_sess = dynamic_cast<BatchRunSession*>(&session);
         if (cache_ctx.parameter_types.size() != batch_sess->GetParameterSchema().size()) {
             status = Status(common::kEngineCacheError, "Inconsistent cache parameter schema size");
@@ -129,7 +131,7 @@ bool Engine::IsCompatibleCache(RunSession& session,  // NOLINT
                 return false;
             }
         }
-    } else if (session.engine_mode() == kBatchRequestMode) {
+    } else if (mode == kBatchRequestMode) {
         auto batch_req_sess = dynamic_cast<BatchRequestRunSession*>(&session);
         if (batch_req_sess == nullptr) {
             return false;

@@ -17,6 +17,7 @@
 #include "udf/default_udf_library.h"
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <limits>
 #include <queue>
@@ -1400,8 +1401,8 @@ void DefaultUdfLibrary::InitMathUdf() {
             @param expr
 
             @since 0.1.0)")
-        .args<float>(static_cast<float (*)(float)>(log))
-        .args<double>(static_cast<double (*)(double)>(log));
+        .args<float>(static_cast<float (*)(float)>(std::log))
+        .args<double>(static_cast<double (*)(double)>(std::log));
     RegisterExprUdf("log").args<AnyArg>(
         [](UdfResolveContext* ctx, ExprNode* x) -> ExprNode* {
             if (!x->GetOutputType()->IsArithmetic()) {
@@ -1444,8 +1445,8 @@ void DefaultUdfLibrary::InitMathUdf() {
             @param expr
 
             @since 0.1.0)")
-        .args<float>(static_cast<float (*)(float)>(log))
-        .args<double>(static_cast<double (*)(double)>(log));
+        .args<float>(static_cast<float (*)(float)>(std::log))
+        .args<double>(static_cast<double (*)(double)>(std::log));
     RegisterExprUdf("ln").args<AnyArg>(
         [](UdfResolveContext* ctx, ExprNode* x) -> ExprNode* {
             if (!x->GetOutputType()->IsArithmetic()) {
@@ -1474,8 +1475,8 @@ void DefaultUdfLibrary::InitMathUdf() {
             @param expr
 
             @since 0.1.0)")
-        .args<float>(static_cast<float (*)(float)>(log2))
-        .args<double>(static_cast<double (*)(double)>(log2));
+        .args<float>(static_cast<float (*)(float)>(std::log2))
+        .args<double>(static_cast<double (*)(double)>(std::log2));
     RegisterExprUdf("log2").args<AnyArg>(
         [](UdfResolveContext* ctx, ExprNode* x) -> ExprNode* {
             if (!x->GetOutputType()->IsArithmetic()) {
@@ -1504,8 +1505,8 @@ void DefaultUdfLibrary::InitMathUdf() {
             @param expr
 
             @since 0.1.0)")
-        .args<float>(static_cast<float (*)(float)>(log10))
-        .args<double>(static_cast<double (*)(double)>(log10));
+        .args<float>(static_cast<float (*)(float)>(std::log10))
+        .args<double>(static_cast<double (*)(double)>(std::log10));
     RegisterExprUdf("log10").args<AnyArg>(
         [](UdfResolveContext* ctx, ExprNode* x) -> ExprNode* {
             if (!x->GetOutputType()->IsArithmetic()) {
