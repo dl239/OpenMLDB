@@ -50,10 +50,9 @@ extern "C" {
 
 namespace hybridse {
 namespace vm {
-using ::llvm::orc::LLJIT;
 
 HybridSeJit::HybridSeJit(::llvm::orc::LLJITBuilderState& s, ::llvm::Error& e)
-    : LLJIT(s, e) {}
+    : llvm::orc::LLJIT(s, e) {}
 HybridSeJit::~HybridSeJit() {}
 
 HybridSeLlvmJitWrapper::HybridSeLlvmJitWrapper(const JitOptions& options) : jit_options_(options) {

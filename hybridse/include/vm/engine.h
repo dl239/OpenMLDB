@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "codec/fe_row_codec.h"
 #include "vm/catalog.h"
 #include "vm/engine_context.h"
@@ -312,6 +313,69 @@ class BatchRequestRunSession : public RunSession {
     std::set<size_t> common_column_indices_;
 };
 
+class RunSessionBuilder {
+ public:
+    RunSessionBuilder()  {}
+    ~RunSessionBuilder() {}
+
+    absl::StatusOr<std::shared_ptr<RunSession>> build() {
+        std::shared_ptr <RunSession> s;
+        switch (mode) {
+            case EngineMode::kBatchMode: {
+                 auto ss = std::make_shared<BatchRunSession>();
+                 ss->SetParameterSchema(parameter_schema_);
+                 s = ss;
+                break;
+            }
+            case EngineMode::kRequestMode: {
+                auto ss = std::make_shared<RequestRunSession>();
+                ss->SetSpName(sp_name_);
+                s = ss;
+                break;
+            }
+            case EngineMode::kBatchRequestMode: {
+                auto ss = std::make_shared<BatchRequestRunSession>();
+                s = ss;
+                break;
+            }
+            default:
+                return absl::UnimplementedError(absl::StrCat("engine mode=", EngineModeName(mode)));
+        }
+
+        if (debug_) {
+            s->EnableDebug();
+        }
+        s->SetCompileInfo(compile_info_);
+
+        return s;
+    }
+
+    EngineMode engine_mode() const { return mode; }
+
+    void SetEngineMode(EngineMode m) { mode = m; }
+    void SetDebug(bool d) { debug_ = d; }
+    void SetParameterSchema(const codec::Schema& schema) { parameter_schema_ = schema; }
+    const Schema& GetParameterSchema() const { return parameter_schema_; }
+
+    bool SetCompileInfo(std::shared_ptr<hybridse::vm::CompileInfo> compile_info) {
+        compile_info_ = compile_info;
+        return true;
+    }
+    const std::set<size_t>& common_column_indices() const { return common_column_indices_; }
+
+    bool debug() const { return debug_; }
+    void SetSpName(const std::string& sp_name) { sp_name_ = sp_name; }
+
+ private:
+    EngineMode mode;
+    bool debug_ = false;
+    codec::Schema parameter_schema_;
+
+    std::shared_ptr<hybridse::vm::CompileInfo> compile_info_;
+    std::string sp_name_;
+    std::set<size_t> common_column_indices_;
+};
+
 /// An options class for controlling runtime interpreter behavior.
 struct ExplainOutput {
     vm::Schema input_schema;      ///< The schema of request row for request-mode query
@@ -367,6 +431,8 @@ class Engine {
     bool Get(const std::string& sql, const std::string& db,
              RunSession& session,    // NOLINT
              base::Status& status);  // NOLINT
+
+    absl::Status Get2(absl::string_view sql, absl::string_view db, RunSessionBuilder* session);
 
     /// \brief Search all tables related to the specific sql in db.
     ///

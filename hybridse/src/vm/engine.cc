@@ -144,6 +144,74 @@ bool Engine::IsCompatibleCache(RunSession& session,  // NOLINT
     return true;
 }
 
+absl::Status Engine::Get2(absl::string_view sql, absl::string_view db, RunSessionBuilder* session_builder) {
+    std::shared_ptr<CompileInfo> cached_info =
+        GetCacheLocked(std::string(db), std::string(sql), session_builder->engine_mode());
+
+    base::Status status;
+    if (cached_info) {
+        // FIXME: add IsCompatibleCache check
+        session_builder->SetEngineMode(cached_info->GetEngineMode());
+        session_builder->SetCompileInfo(cached_info);
+        return absl::OkStatus();
+    }
+
+    auto origin_mode = session_builder->engine_mode();
+
+    status = base::Status::OK();
+    std::shared_ptr<SqlCompileInfo> info = std::make_shared<SqlCompileInfo>();
+    auto& sql_context = info->get_sql_context();
+    sql_context.sql = sql;
+    sql_context.db = db;
+    sql_context.engine_mode = session_builder->engine_mode();
+    sql_context.is_cluster_optimized = options_.IsClusterOptimzied();
+    sql_context.is_batch_request_optimized = options_.IsBatchRequestOptimized();
+    sql_context.enable_batch_window_parallelization = options_.IsEnableBatchWindowParallelization();
+    sql_context.enable_window_column_pruning = options_.IsEnableWindowColumnPruning();
+    sql_context.enable_expr_optimize = options_.IsEnableExprOptimize();
+    if (session_builder->engine_mode() == kBatchMode) {
+        sql_context.parameter_types = session_builder->GetParameterSchema();
+    } else if (session_builder->engine_mode() == kBatchRequestMode) {
+        sql_context.batch_request_info.common_column_indices = session_builder->common_column_indices();
+    }
+
+    SqlCompiler compiler(std::atomic_load_explicit(&cl_, std::memory_order_acquire), options_.IsKeepIr(), false,
+                         options_.IsPlanOnly());
+    bool ok = compiler.Compile(info->get_sql_context(), status);
+    if (!ok || 0 != status.code) {
+        return absl::FailedPreconditionError("compile fail");
+    }
+    session_builder->SetEngineMode(info->GetEngineMode());
+
+    if (!options_.IsCompileOnly()) {
+        ok = compiler.BuildClusterJob(info->get_sql_context(), status);
+        if (!ok || 0 != status.code) {
+            return absl::FailedPreconditionError(absl::StrCat("fail to build cluster job: ", status.msg));
+        }
+    }
+
+    {
+        auto s = ExtractRequestRowsInSQL(&sql_context);
+        if (!s.ok()) {
+            return s;
+        }
+    }
+
+    SetCacheLocked(std::string(db), std::string(sql), origin_mode, info);
+    session_builder->SetCompileInfo(info);
+    if (session_builder->debug()) {
+        std::ostringstream plan_oss;
+        if (nullptr != sql_context.physical_plan) {
+            sql_context.physical_plan->Print(plan_oss, "");
+            LOG(INFO) << "physical plan:\n" << plan_oss.str() << std::endl;
+        }
+        std::ostringstream runner_oss;
+        sql_context.cluster_job->Print(runner_oss, "");
+        LOG(INFO) << "cluster job:\n" << runner_oss.str() << std::endl;
+    }
+    return absl::OkStatus();
+}
+
 bool Engine::Get(const std::string& sql, const std::string& db, RunSession& session,
                  base::Status& status) {  // NOLINT (runtime/references)
     std::shared_ptr<CompileInfo> cached_info = GetCacheLocked(db, sql, session.engine_mode());

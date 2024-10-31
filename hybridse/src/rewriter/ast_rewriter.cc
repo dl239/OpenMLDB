@@ -545,14 +545,14 @@ class RequestQueryRewriteUnparser : public zetasql::parser::Unparser {
     std::optional<vm::EngineMode> mode;
 };
 
-absl::StatusOr<std::string> Rewrite(absl::string_view query) {
+absl::StatusOr<std::string> Rewrite(absl::string_view query, vm::EngineMode* mode) {
     std::unique_ptr<zetasql::ParserOutput> ast;
     auto s = hybridse::plan::ParseStatement(query, &ast);
     if (!s.ok()) {
         return s;
     }
 
-    return Rewrite(ast->statement(), query, nullptr);
+    return Rewrite(ast->statement(), query, mode);
 }
 
 absl::StatusOr<std::string> Rewrite(const zetasql::ASTStatement* stmt, absl::string_view query, vm::EngineMode* mode) {

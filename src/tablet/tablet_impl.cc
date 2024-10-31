@@ -1750,49 +1750,48 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
 
     hybridse::vm::EngineMode mode =
         request->is_batch() ? hybridse::vm::EngineMode::kBatchMode : hybridse::vm::EngineMode::kRequestMode;
-    if (request->has_engine_mode()) {
-        // new option
-        auto s = toEM(request->engine_mode());
-        if (!s.ok()) {
-            SET_RESP_AND_WARN(response, base::ReturnCode::kInvalidParameter, s.status().ToString());
-            return;
-        }
-        mode = s.value();
-    } else {
-        mode = hybridse::vm::Engine::TryDetermineEngineMode(request->sql(), mode);
-    }
+    auto& sql = request->sql();
 
     ::hybridse::base::Status status;
+    ::hybridse::vm::RunSessionBuilder builder;
+    builder.SetEngineMode(mode);  // engine mode is not correct at this time
+    builder.SetDebug(request->is_debug());
+    // convert repeated openmldb:type::DataType into hybridse::codec::Schema
+    hybridse::codec::Schema parameter_schema;
+    for (int i = 0; i < request->parameter_types().size(); i++) {
+        auto column = parameter_schema.Add();
+        hybridse::type::Type hybridse_type;
+
+        if (!openmldb::schema::SchemaAdapter::ConvertType(request->parameter_types(i), &hybridse_type)) {
+            response->set_msg("Invalid parameter type: " + openmldb::type::DataType_Name(request->parameter_types(i)));
+            response->set_code(::openmldb::base::kSQLCompileError);
+            return;
+        }
+        column->set_type(hybridse_type);
+    }
+    builder.SetParameterSchema(parameter_schema);
+    {
+        auto s = engine_->Get2(sql, request->db(), &builder);
+        if (!s.ok()) {
+            response->set_msg(s.ToString());
+            response->set_code(::openmldb::base::kSQLCompileError);
+            DLOG(WARNING) << "fail to compile sql " << sql << ", message: " << s.ToString();
+            return;
+        }
+    }
+
+    // now that's the correct engine mode
+    mode = builder.engine_mode();
     switch (mode) {
         case hybridse::vm::EngineMode::kBatchMode: {
-            // convert repeated openmldb:type::DataType into hybridse::codec::Schema
-            hybridse::codec::Schema parameter_schema;
-            for (int i = 0; i < request->parameter_types().size(); i++) {
-                auto column = parameter_schema.Add();
-                hybridse::type::Type hybridse_type;
+            auto session_ptr = builder.build();
+            if (!session_ptr.ok()) {
+                response->set_msg(session_ptr.status().ToString());
+                response->set_code(::openmldb::base::kSQLCompileError);
+                return;
+            }
 
-                if (!openmldb::schema::SchemaAdapter::ConvertType(request->parameter_types(i), &hybridse_type)) {
-                    response->set_msg("Invalid parameter type: " +
-                                      openmldb::type::DataType_Name(request->parameter_types(i)));
-                    response->set_code(::openmldb::base::kSQLCompileError);
-                    return;
-                }
-                column->set_type(hybridse_type);
-            }
-            ::hybridse::vm::BatchRunSession session;
-            if (request->is_debug()) {
-                session.EnableDebug();
-            }
-            session.SetParameterSchema(parameter_schema);
-            {
-                bool ok = engine_->Get(request->sql(), request->db(), session, status);
-                if (!ok) {
-                    response->set_msg(status.msg);
-                    response->set_code(::openmldb::base::kSQLCompileError);
-                    DLOG(WARNING) << "fail to compile sql " << request->sql() << ", message: " << status.msg;
-                    return;
-                }
-            }
+            auto session = *std::dynamic_pointer_cast<hybridse::vm::BatchRunSession>(session_ptr.value());
 
             ::hybridse::codec::Row parameter_row;
             auto& request_buf = static_cast<brpc::Controller*>(ctrl)->request_attachment();
@@ -1808,7 +1807,7 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
             if (run_ret != 0) {
                 response->set_msg(status.msg);
                 response->set_code(::openmldb::base::kSQLRunError);
-                DLOG(WARNING) << "fail to run sql: " << request->sql();
+                DLOG(WARNING) << "fail to run sql: " << sql;
                 return;
             }
             uint32_t byte_size = 0;
@@ -1830,15 +1829,11 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
             response->set_byte_size(byte_size);
             response->set_count(count);
             response->set_code(::openmldb::base::kOk);
-            DLOG(INFO) << "handle batch sql " << request->sql() << " with record cnt " << count << " byte size "
+            DLOG(INFO) << "handle batch sql " << sql << " with record cnt " << count << " byte size "
                        << byte_size;
             break;
         }
         case hybridse::vm::kRequestMode: {
-            ::hybridse::vm::RequestRunSession session;
-            if (request->is_debug()) {
-                session.EnableDebug();
-            }
             if (request->is_procedure()) {
                 const std::string& db_name = request->db();
                 const std::string& sp_name = request->sp_name();
@@ -1853,19 +1848,19 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
                         return;
                     }
                 }
-                session.SetCompileInfo(request_compile_info);
-                session.SetSpName(sp_name);
-                RunRequestQuery(ctrl, *request, session, *response, *buf);
-            } else {
-                bool ok = engine_->Get(request->sql(), request->db(), session, status);
-                if (!ok || session.GetCompileInfo() == nullptr) {
-                    response->set_msg(status.msg);
-                    response->set_code(::openmldb::base::kSQLCompileError);
-                    DLOG(WARNING) << "fail to compile sql in request mode:\n" << request->sql();
-                    return;
-                }
-                RunRequestQuery(ctrl, *request, session, *response, *buf);
+                builder.SetCompileInfo(request_compile_info);
+                builder.SetSpName(sp_name);
             }
+
+            auto session_rs = builder.build();
+            if (!session_rs.ok()) {
+                response->set_msg(session_rs.status().ToString());
+                response->set_code(::openmldb::base::kSQLCompileError);
+                return;
+            }
+            auto session = *std::dynamic_pointer_cast<hybridse::vm::RequestRunSession>(session_rs.value());
+            RunRequestQuery(ctrl, *request, session, *response, *buf);
+
             const std::string& sql = session.GetCompileInfo()->GetSql();
             if (response->code() != ::openmldb::base::kOk) {
                 DLOG(WARNING) << "fail to run sql " << sql << " error msg: " << response->msg();
@@ -1880,17 +1875,15 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
             // no parameter input or bachrequst row
             // batchrequest row must specified in CONFIG (values = ...)
             ::hybridse::base::Status status;
-            ::hybridse::vm::BatchRequestRunSession session;
-            if (request->is_debug()) {
-                session.EnableDebug();
-            }
-            bool ok = engine_->Get(request->sql(), request->db(), session, status);
-            if (!ok || session.GetCompileInfo() == nullptr) {
-                response->set_msg(status.msg);
+
+            auto session_rs = builder.build();
+            if (!session_rs.ok()) {
+                response->set_msg(session_rs.status().ToString());
                 response->set_code(::openmldb::base::kSQLCompileError);
-                DLOG(WARNING) << "fail to compile sql in request mode:\n" << request->sql();
                 return;
             }
+            auto session = *std::dynamic_pointer_cast<hybridse::vm::BatchRequestRunSession>(session_rs.value());
+
             auto info = std::dynamic_pointer_cast<hybridse::vm::SqlCompileInfo>(session.GetCompileInfo());
             if (info && info->get_sql_context().request_rows.empty()) {
                 response->set_msg("batch request values must specified in SQL CONFIG (values = [...])");
@@ -1903,7 +1896,7 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
             if (run_ret != 0) {
                 response->set_msg(status.msg);
                 response->set_code(::openmldb::base::kSQLRunError);
-                DLOG(WARNING) << "fail to run batchrequest sql: " << request->sql();
+                DLOG(WARNING) << "fail to run batchrequest sql: " << sql;
                 return;
             }
             uint32_t byte_size = 0;

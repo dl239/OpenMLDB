@@ -27,7 +27,7 @@ namespace hybridse {
 
 namespace rewriter {
 
-absl::StatusOr<std::string> Rewrite(absl::string_view query);
+absl::StatusOr<std::string> Rewrite(absl::string_view query, vm::EngineMode* mode = nullptr);
 absl::StatusOr<std::string> Rewrite(const zetasql::ASTStatement* stmt, absl::string_view query, vm::EngineMode* mode);
 
 }  // namespace rewriter

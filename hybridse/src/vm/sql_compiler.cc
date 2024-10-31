@@ -23,6 +23,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/raw_ostream.h"
 #include "plan/plan_api.h"
+#include "rewriter/ast_rewriter.h"
 #include "udf/default_udf_library.h"
 #include "vm/jit_wrapper.h"
 #include "vm/runner.h"
@@ -293,6 +294,18 @@ bool SqlCompiler::BuildClusterJob(SqlContext& ctx, Status& status) {  // NOLINT
  */
 bool SqlCompiler::Parse(SqlContext& ctx,
                         ::hybridse::base::Status& status) {  // NOLINT
+    auto mode = ctx.engine_mode;
+    auto s = hybridse::rewriter::Rewrite(ctx.sql, &mode);
+    if (!s.ok()) {
+        status.code = common::kPlanError;
+        status.msg = s.status().ToString();
+        return false;
+    }
+
+    // correct the compile info
+    ctx.sql = s.value();
+    ctx.engine_mode = mode;
+
     status = hybridse::plan::PlanAPI::CreatePlanTreeFromScript(&ctx);
     if (!status.isOK()) {
         LOG(WARNING) << "Fail create sql plan: " << status;
