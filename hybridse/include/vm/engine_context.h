@@ -15,11 +15,10 @@
  */
 #ifndef HYBRIDSE_INCLUDE_VM_ENGINE_CONTEXT_H_
 #define HYBRIDSE_INCLUDE_VM_ENGINE_CONTEXT_H_
-#include <map>
+
 #include <memory>
 #include <set>
 #include <string>
-#include "boost/compute/detail/lru_cache.hpp"
 #include "vm/physical_op.h"
 namespace hybridse {
 namespace vm {
@@ -82,17 +81,6 @@ class CompileInfo {
     virtual void DumpPhysicalPlan(std::ostream& output, const std::string& tab) = 0;
     virtual void DumpClusterJob(std::ostream& output, const std::string& tab) = 0;
 };
-
-using BoostLRU = boost::compute::detail::lru_cache<std::string, std::shared_ptr<CompileInfo>>;
-
-/// @typedef EngineLRUCache
-/// - EngineMode
-///     - DB name
-///       - SQL string
-///           - CompileInfo
-typedef std::map<EngineMode,
-        std::map<std::string, BoostLRU>>
-    EngineLRUCache;
 
 class CompileInfoCache {
  public:

@@ -24,8 +24,10 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "codec/fe_row_codec.h"
+#include "tbb/concurrent_lru_cache.h"
 #include "vm/catalog.h"
 #include "vm/engine_context.h"
 #include "vm/router.h"
@@ -36,6 +38,17 @@ namespace vm {
 using ::hybridse::codec::Row;
 
 inline constexpr const char* LONG_WINDOWS = "long_windows";
+
+using BoostLRU = tbb::concurrent_lru_cache<std::string, std::shared_ptr<CompileInfo>>;
+
+/// @typedef EngineLRUCache
+/// - EngineMode
+///     - DB name
+///       - SQL string
+///           - CompileInfo
+typedef absl::node_hash_map<EngineMode,
+        absl::node_hash_map<std::string, BoostLRU>>
+    EngineLRUCache;
 
 class SqlContext;
 class Engine;

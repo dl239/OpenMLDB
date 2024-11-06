@@ -31,6 +31,7 @@ endfunction()
 add_contrib(simdjson)
 add_contrib(rapidjson)
 add_contrib(farmhash)
+add_contrib(oneTBB)
 
 if (BUILD_SHARED_LIBS)
     add_contrib(gflags-cmake gflags)

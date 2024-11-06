@@ -22,7 +22,6 @@
 
 #include "absl/status/status.h"
 #include "absl/time/clock.h"
-#include "boost/none.hpp"
 #include "codec/fe_row_codec.h"
 #include "gflags/gflags.h"
 #include "llvm-c/Target.h"
@@ -49,8 +48,7 @@ EngineOptions::EngineOptions()
       enable_expr_optimize_(true),
       enable_batch_window_parallelization_(false),
       enable_window_column_pruning_(false),
-      max_sql_cache_size_(50) {
-}
+      max_sql_cache_size_(50) {}
 
 static absl::Status ExtractRows(SqlContext* ctx, const node::ExprNode* expr, const codec::Schema* sc,
                                 std::vector<codec::Row>* out) ABSL_ATTRIBUTE_NONNULL();
@@ -393,6 +391,7 @@ bool Engine::Explain(const std::string& sql, const std::string& db, EngineMode e
 }
 
 void Engine::ClearCacheLocked(const std::string& db) {
+    // LRU entry itself is thread-safe, but the hash map contains it is not
     absl::WriterMutexLock lock(&mu_);
     if (db.empty()) {
         lru_cache_.clear();
@@ -410,55 +409,37 @@ EngineOptions Engine::GetEngineOptions() {
 
 std::shared_ptr<CompileInfo> Engine::GetCacheLocked(const std::string& db, const std::string& sql,
                                                     EngineMode engine_mode) {
-    BoostLRU* lru = nullptr;
-    {
-        absl::ReaderMutexLock l(&mu_);
-        // Check mode
-        auto mode_iter = lru_cache_.find(engine_mode);
-        if (mode_iter == lru_cache_.end()) {
-            return nullptr;
-        }
-        auto& mode_cache = mode_iter->second;
-        // Check db
-        auto db_iter = mode_cache.find(db);
-        if (db_iter == mode_cache.end()) {
-            return nullptr;
-        }
-        lru = &db_iter->second;
-        if (!lru->contains(sql)) {
-            return nullptr;
-        }
-    }
-
-    // Check SQL
-    absl::WriterMutexLock l(&mu_);
-    auto value = lru->get(sql);
-    if (value == boost::none) {
+    absl::ReaderMutexLock l(&mu_);
+    // Check mode
+    auto mode_iter = lru_cache_.find(engine_mode);
+    if (mode_iter == lru_cache_.end()) {
         return nullptr;
-    } else {
-        return value.value();
     }
+    auto& mode_cache = mode_iter->second;
+    // Check db
+    auto db_iter = mode_cache.find(db);
+    if (db_iter == mode_cache.end()) {
+        return nullptr;
+    }
+    auto& lru = db_iter->second;
+    auto handle = lru[sql];
+
+    return handle.value();
 }
 
 bool Engine::SetCacheLocked(const std::string& db, const std::string& sql, EngineMode engine_mode,
                             std::shared_ptr<CompileInfo> info) {
-    absl::WriterMutexLock lock(&mu_);
-
+    absl::ReaderMutexLock lock(&mu_);
     auto& mode_cache = lru_cache_[engine_mode];
-    auto db_iter = mode_cache.find(db);
-    if (db_iter == mode_cache.end()) {
-        db_iter = mode_cache.insert(db_iter, {db, BoostLRU(options_.GetMaxSqlCacheSize())});
-    }
+    auto [db_iter, inserted] = mode_cache.try_emplace(
+        db, [](std::string key) -> std::shared_ptr<CompileInfo> { return nullptr; }, options_.GetMaxSqlCacheSize());
     auto& lru = db_iter->second;
-    auto value = lru.get(sql);
-    if (value == boost::none || engine_mode == kBatchRequestMode) {
-        lru.insert(sql, info);
-        return true;
-    } else {
-        // TODO(xxx): Ensure compile result is stable
-        DLOG(INFO) << "Engine cache already exists: " << engine_mode << " " << db << "\n" << sql;
-        return false;
+    auto handle = lru[sql];
+    if (handle.value() == nullptr) {
+        handle.value() = info;
     }
+
+    return true;
 }
 
 RunSession::RunSession(EngineMode engine_mode) : engine_mode_(engine_mode), is_debug_(false), sp_name_("") {}
