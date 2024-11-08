@@ -51,15 +51,11 @@ extern "C" {
 namespace hybridse {
 namespace vm {
 
-HybridSeJit::HybridSeJit(::llvm::orc::LLJITBuilderState& s, ::llvm::Error& e)
-    : llvm::orc::LLJIT(s, e) {}
-HybridSeJit::~HybridSeJit() {}
-
 HybridSeLlvmJitWrapper::HybridSeLlvmJitWrapper(const JitOptions& options) : jit_options_(options) {
     LOG(INFO) << "creating new jit instance: " << this;
 }
 
-static void RunDefaultOptPasses(::llvm::Module* m) {
+static inline void RunDefaultOptPasses(::llvm::Module* m) {
     ::llvm::legacy::FunctionPassManager fpm(m);
     // Add some optimizations.
     fpm.add(::llvm::createInstructionCombiningPass());
@@ -72,52 +68,9 @@ static void RunDefaultOptPasses(::llvm::Module* m) {
         fpm.run(*it);
     }
 }
-
-bool HybridSeJit::OptModule(::llvm::Module* m) {
-    if (auto err = applyDataLayout(*m)) {
-        return false;
-    }
-    DLOG(INFO) << "Module before opt:\n" << LlvmToString(*m);
-    RunDefaultOptPasses(m);
-    DLOG(INFO) << "Module after opt:\n" << LlvmToString(*m);
-    return true;
-}
-
-bool HybridSeJit::AddSymbol(::llvm::orc::JITDylib& jd, const std::string& name,
-                            void* fn_ptr) {
-    if (fn_ptr == NULL) {
-        LOG(WARNING) << "fn ptr is null";
-        return false;
-    }
-    ::llvm::orc::MangleAndInterner mi(getExecutionSession(), getDataLayout());
-    return HybridSeJit::AddSymbol(jd, mi, name, fn_ptr);
-}
-
-bool HybridSeJit::AddSymbol(const std::string& name, void* fn_ptr) {
-    if (fn_ptr == NULL) {
-        LOG(WARNING) << "fn ptr is null";
-        return false;
-    }
-    auto& jd = getMainJITDylib();
-    return AddSymbol(jd, name, fn_ptr);
-}
-
-void HybridSeJit::Init() {
-    auto& jd = getMainJITDylib();
-    auto gen = llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-        getDataLayout().getGlobalPrefix());
-    auto err = gen.takeError();
-    if (err) {
-        LOG(WARNING) << "Create process sym failed";
-        ::llvm::errs() << err;
-        return;
-    }
-    jd.addGenerator(std::move(gen.get()));
-}
-
-bool HybridSeJit::AddSymbol(::llvm::orc::JITDylib& jd,
-                            ::llvm::orc::MangleAndInterner& mi,
-                            const std::string& fn_name, void* fn_ptr) {
+static bool AddSymbol(::llvm::orc::JITDylib& jd,  // NOLINT
+                      ::llvm::orc::MangleAndInterner& mi,  // NOLINT
+                      const std::string& fn_name, void* fn_ptr) {
     ::llvm::StringRef symbol(fn_name);
     ::llvm::JITEvaluatedSymbol jit_symbol(
         ::llvm::pointerToJITTargetAddress(fn_ptr), ::llvm::JITSymbolFlags());
@@ -140,7 +93,7 @@ bool HybridSeLlvmJitWrapper::Init() {
         return true;
     }
 
-    HybridSeJitBuilder builder;
+    llvm::orc::LLLazyJITBuilder builder;
     if (jit_options_.IsEnableGdb()) {
         auto JTMB = llvm::orc::JITTargetMachineBuilder::detectHost();
         auto e = JTMB.takeError();
@@ -180,7 +133,17 @@ bool HybridSeLlvmJitWrapper::Init() {
         }
     }
     this->jit_ = std::move(jit.get());
-    jit_->Init();
+
+    auto& jd = jit_->getMainJITDylib();
+    auto gen = llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+        jit_->getDataLayout().getGlobalPrefix());
+    auto err = gen.takeError();
+    if (err) {
+        LOG(WARNING) << "Create process sym failed";
+        ::llvm::errs() << err;
+        return false;
+    }
+    jd.addGenerator(std::move(gen.get()));
 
     this->mi_ = std::unique_ptr<::llvm::orc::MangleAndInterner>(
         new ::llvm::orc::MangleAndInterner(jit_->getExecutionSession(),
@@ -196,9 +159,12 @@ bool HybridSeLlvmJitWrapper::Init() {
     return true;
 }
 
-bool HybridSeLlvmJitWrapper::OptModule(::llvm::Module* module) {
+bool HybridSeLlvmJitWrapper::OptModule(::llvm::Module* m) {
     EnsureInitialized();
-    return jit_->OptModule(module);
+    DLOG(INFO) << "Module before opt:\n" << LlvmToString(*m);
+    RunDefaultOptPasses(m);
+    DLOG(INFO) << "Module after opt:\n" << LlvmToString(*m);
+    return true;
 }
 
 bool HybridSeLlvmJitWrapper::AddModule(
@@ -243,7 +209,7 @@ RawPtrHandle HybridSeLlvmJitWrapper::FindFunction(const std::string& funcname) {
 
 bool HybridSeLlvmJitWrapper::AddExternalFunction(const std::string& name,
                                                void* addr) {
-    return hybridse::vm::HybridSeJit::AddSymbol(jit_->getMainJITDylib(), *mi_,
+    return AddSymbol(jit_->getMainJITDylib(), *mi_,
                                                 name, addr);
 }
 

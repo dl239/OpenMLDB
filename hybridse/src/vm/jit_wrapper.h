@@ -59,7 +59,9 @@ class HybridSeJitWrapper {
 
     virtual hybridse::vm::RawPtrHandle FindFunction(const std::string& funcname) = 0;
 
-    std::string UniqueModuleName(absl::string_view tag) { return absl::StrCat(tag, "_", symbol_idx_.fetch_add(1)); }
+    std::string UniqueModuleName(absl::string_view tag) {
+        return absl::StrCat(tag, "_", symbol_idx_.fetch_add(1, std::memory_order_relaxed));
+    }
 
     // create the JIT wrapper with default builtin symbols imported already
     static HybridSeJitWrapper* CreateWithDefaultSymbols(udf::UdfLibrary*, base::Status*,

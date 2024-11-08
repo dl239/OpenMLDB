@@ -38,37 +38,6 @@ struct JitString {
     int8_t* data;
 };
 
-class HybridSeJit : public ::llvm::orc::LLJIT {
-    template <typename, typename, typename>
-    friend class ::llvm::orc::LLJITBuilderSetters;
-
- public:
-    void Init();
-
-    bool OptModule(::llvm::Module* m);
-
-    // add to main module
-    bool AddSymbol(const std::string& name, void* fn_ptr);
-
-    // add to main module
-    bool AddSymbol(::llvm::orc::JITDylib& jd,  // NOLINT
-                   const std::string& name, void* fn_ptr);
-
-    static bool AddSymbol(::llvm::orc::JITDylib& jd,           // NOLINT
-                          ::llvm::orc::MangleAndInterner& mi,  // NOLINT
-                          const std::string& fn_name, void* fn_ptr);
-    ~HybridSeJit();
-
- protected:
-    HybridSeJit(::llvm::orc::LLJITBuilderState& s, ::llvm::Error& e);  // NOLINT
-};
-
-class HybridSeJitBuilder
-    : public ::llvm::orc::LLLazyJITBuilderState,
-      public ::llvm::orc::LLLazyJITBuilderSetters<HybridSeJit, HybridSeJitBuilder,
-                                              ::llvm::orc::LLLazyJITBuilderState> {
-};
-
 template <typename T>
 std::string LlvmToString(const T& value) {
     std::string str;
@@ -97,7 +66,7 @@ class HybridSeLlvmJitWrapper : public HybridSeJitWrapper {
 
  private:
     const JitOptions jit_options_;
-    std::unique_ptr<HybridSeJit> jit_;
+    std::unique_ptr<llvm::orc::LLLazyJIT> jit_;
     std::unique_ptr<::llvm::orc::MangleAndInterner> mi_;
 };
 

@@ -15,6 +15,8 @@
  */
 #include "vm/physical_plan_context.h"
 
+#include <atomic>
+
 #include "codegen/ir_base_builder.h"
 #include "passes/expression/default_passes.h"
 #include "passes/lambdafy_projects.h"
@@ -126,7 +128,8 @@ Status PhysicalPlanContext::InitFnDef(const ColumnProjects& projects, const Sche
     }
 
     // set output function info
-    std::string fn_name = "__internal_sql_codegen_" + std::to_string(codegen_func_id_counter_.fetch_add(1));
+    std::string fn_name =
+        "__internal_sql_codegen_" + std::to_string(codegen_func_id_counter_.fetch_add(1, std::memory_order_relaxed));
     output_fn->SetFn(fn_name, resolved_func, schemas_ctx);
     if (has_agg) {
         output_fn->SetPrimaryFrame(projects.GetPrimaryFrame());
