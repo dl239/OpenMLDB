@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <string>
+#include <utility>
 
 #include "base/raw_buffer.h"
 
@@ -100,6 +101,12 @@ class Slice {
         return ((size_ >= x.size_) && (memcmp(data_, x.data_, x.size_) == 0));
     }
 
+ protected:
+    void _swap(Slice &slice) {
+        std::swap(data_, slice.data_);
+        std::swap(size_, slice.size_);
+    }
+
  private:
     uint32_t size_;
     const char *data_;
@@ -159,9 +166,10 @@ class RefCountedSlice : public Slice {
     RefCountedSlice(const char *data, size_t size, bool managed)
         : Slice(data, size), ref_cnt_(managed ? new std::atomic<int32_t>(1) : nullptr) {}
 
-    void Release();
+    void _release();
 
-    void Update(const RefCountedSlice &slice);
+    void _copy(const RefCountedSlice &slice);
+    void _swap(RefCountedSlice &slice);
 
     std::atomic<int32_t> *ref_cnt_;
 };

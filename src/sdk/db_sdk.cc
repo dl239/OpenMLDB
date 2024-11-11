@@ -22,7 +22,6 @@
 #include <snappy.h>
 
 #include <algorithm>
-#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -103,7 +102,7 @@ bool DBSDK::InitExternalFun() {
     std::vector<std::string> remove_funs;
     std::vector<std::shared_ptr<openmldb::common::ExternalFun>> add_funs;
     {
-        std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         for (const auto& kv : external_fun_) {
             bool not_in = true;
             for (const auto& fun : fun_vec) {
@@ -151,7 +150,7 @@ bool DBSDK::RegisterExternalFun(const std::shared_ptr<openmldb::common::External
             ->RegisterExternalFunction(fun->name(), return_type, fun->return_nullable(), arg_types, fun->arg_nullable(),
                                        fun->is_aggregate(), "")
             .isOK()) {
-        std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         external_fun_.emplace(fun->name(), fun);
         return true;
     }
@@ -161,7 +160,7 @@ bool DBSDK::RegisterExternalFun(const std::shared_ptr<openmldb::common::External
 bool DBSDK::RemoveExternalFun(const std::string& name) {
     std::shared_ptr<::openmldb::common::ExternalFun> fun;
     {
-        std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         auto iter = external_fun_.find(name);
         if (iter == external_fun_.end()) {
             return false;
@@ -175,7 +174,7 @@ bool DBSDK::RemoveExternalFun(const std::string& name) {
         arg_types.emplace_back(data_type);
     }
     engine_->RemoveExternalFunction(fun->name(), arg_types, "");
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+    absl::WriterMutexLock lock(&mu_);
     external_fun_.erase(name);
     return true;
 }
@@ -393,7 +392,7 @@ bool ClusterSDK::UpdateCatalog(const std::vector<std::string>& table_datas, cons
         return false;
     }
     {
-        std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         table_to_tablets_ = mapping;
         catalog_ = new_catalog;
     }
@@ -471,7 +470,7 @@ uint32_t DBSDK::GetTableId(const std::string& db, const std::string& tname) {
 
 std::shared_ptr<::openmldb::nameserver::TableInfo> DBSDK::GetTableInfo(const std::string& db,
                                                                        const std::string& tname) {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto it = table_to_tablets_.find(db);
     if (it == table_to_tablets_.end()) {
         return {};
@@ -485,7 +484,7 @@ std::shared_ptr<::openmldb::nameserver::TableInfo> DBSDK::GetTableInfo(const std
 }
 
 std::vector<std::shared_ptr<::openmldb::nameserver::TableInfo>> DBSDK::GetTables(const std::string& db) {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     std::vector<std::shared_ptr<::openmldb::nameserver::TableInfo>> tables;
     auto it = table_to_tablets_.find(db);
     if (it == table_to_tablets_.end()) {
@@ -511,7 +510,7 @@ std::vector<std::string> DBSDK::GetAllTables() {
 }
 
 std::vector<std::string> DBSDK::GetTableNames(const std::string& db) {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     std::vector<std::string> tableNames;
     auto it = table_to_tablets_.find(db);
     if (it == table_to_tablets_.end()) {
@@ -632,7 +631,7 @@ std::shared_ptr<hybridse::sdk::ProcedureInfo> DBSDK::GetProcedureInfo(const std:
         *msg = "db or sp_name is empty";
         return {};
     } else {
-        std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+        absl::ReaderMutexLock lock(&mu_);
         auto sp = catalog_->GetProcedureInfo(db, sp_name);
         if (!sp) {
             *msg = sp_name + " does not exist in " + db;
@@ -647,7 +646,7 @@ std::vector<std::shared_ptr<hybridse::sdk::ProcedureInfo>> DBSDK::GetProcedureIn
     if (msg == nullptr) {
         return sp_infos;
     }
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+    absl::ReaderMutexLock lock(&mu_);
     auto& db_sp_map = catalog_->GetProcedures();
     for (const auto& db_kv : db_sp_map) {
         for (const auto& sp_kv : db_kv.second) {
@@ -724,7 +723,7 @@ bool StandAloneSDK::BuildCatalog() {
         return false;
     }
     {
-        std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+        absl::WriterMutexLock lock(&mu_);
         table_to_tablets_ = mapping;
         catalog_ = new_catalog;
     }

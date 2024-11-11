@@ -106,21 +106,20 @@ bool HybridSeLlvmJitWrapper::Init() {
             LOG(WARNING) << "GDB listener not enabled for non-Linux";;
         }
         // require higher LLVM
-        // builder
-        //     .setJITTargetMachineBuilder(std::move(JTMB.get()))
-        //     .setObjectLinkingLayerCreator(
-        //         [&](llvm::orc::ExecutionSession& ES) {
-        //         auto GetMemMgr = []() { return std::make_unique<llvm::SectionMemoryManager>(); };
-        //         auto ObjLinkingLayer = std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(ES, std::move(GetMemMgr));
-        //
-        //         // Register the event listener.
-        //         ObjLinkingLayer->registerJITEventListener(*JITEventListener::createGDBRegistrationListener());
-        //
-        //         // Make sure the debug info sections aren't stripped.
-        //         ObjLinkingLayer->setProcessAllSections(true);
-        //
-        //         return ObjLinkingLayer;
-        //     });
+        builder
+            .setJITTargetMachineBuilder(std::move(JTMB.get()))
+            .setObjectLinkingLayerCreator([&](llvm::orc::ExecutionSession& ES, const llvm::Triple& TT) {
+                auto GetMemMgr = []() { return std::make_unique<llvm::SectionMemoryManager>(); };
+                auto ObjLinkingLayer = std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(ES, std::move(GetMemMgr));
+
+                // Register the event listener.
+                ObjLinkingLayer->registerJITEventListener(*llvm::JITEventListener::createGDBRegistrationListener());
+
+                // Make sure the debug info sections aren't stripped.
+                ObjLinkingLayer->setProcessAllSections(true);
+
+                return ObjLinkingLayer;
+            });
     }
     builder.setNumCompileThreads(jit_options_.threads_);
     auto jit = builder.create();

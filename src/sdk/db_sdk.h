@@ -71,8 +71,8 @@ class DBSDK {
 
     inline uint64_t GetClusterVersion() { return cluster_version_.load(std::memory_order_relaxed); }
 
-    inline std::shared_ptr<::openmldb::catalog::SDKCatalog> GetCatalog() {
-        std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
+    std::shared_ptr<::openmldb::catalog::SDKCatalog> GetCatalog() {
+        absl::ReaderMutexLock lock(&mu_);
         return catalog_;
     }
     inline ::hybridse::vm::Engine* GetEngine() { return engine_; }
@@ -123,7 +123,7 @@ class DBSDK {
     std::atomic<uint64_t> cluster_version_{0};
     ::openmldb::base::Random rand_{0xdeadbeef};
 
-    ::openmldb::base::SpinMutex mu_;
+    absl::Mutex mu_;
     std::shared_ptr<::openmldb::catalog::ClientManager> client_manager_;
     std::shared_ptr<::openmldb::catalog::SDKCatalog> catalog_;
     std::map<std::string, std::map<std::string, std::shared_ptr<::openmldb::nameserver::TableInfo>>> table_to_tablets_;
