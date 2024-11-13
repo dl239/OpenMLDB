@@ -30,6 +30,7 @@
 #include "catalog/distribute_iterator.h"
 #include "client/tablet_client.h"
 #include "codec/row.h"
+#include "oneapi/tbb/concurrent_hash_map.h"
 #include "storage/schema.h"
 #include "storage/table.h"
 #include "sdk/sql_cluster_router.h"
@@ -210,7 +211,9 @@ class TabletTableHandler : public ::hybridse::vm::TableHandler,
     std::shared_ptr<hybridse::vm::Tablet> local_tablet_;
 };
 
-typedef std::map<std::string, std::map<std::string, std::shared_ptr<TabletTableHandler>>> TabletTables;
+typedef tbb::concurrent_hash_map<std::string,
+                                 tbb::concurrent_hash_map<std::string, std::shared_ptr<TabletTableHandler>>>
+    TabletTables;
 typedef std::map<std::string, std::shared_ptr<::hybridse::type::Database>> TabletDB;
 typedef std::map<std::string, std::map<std::string, std::shared_ptr<::hybridse::sdk::ProcedureInfo>>> Procedures;
 

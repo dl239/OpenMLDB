@@ -32,6 +32,7 @@
 #include "base/spinlock.h"
 #include "client/tablet_client.h"
 #include "nameserver/system_table.h"
+#include "oneapi/tbb/concurrent_hash_map.h"
 #include "sdk/db_sdk.h"
 #include "sdk/options_map_parser.h"
 #include "sdk/interactive.h"
@@ -454,7 +455,7 @@ class SQLClusterRouter : public SQLRouter {
  private:
     std::shared_ptr<BasicRouterOptions> options_;
     std::string db_;
-    std::map<std::string, std::string> session_variables_;
+    tbb::concurrent_hash_map<std::string, std::string> session_variables_;
     bool is_cluster_mode_;
     InteractiveValidator interactive_validator_;
     DBSDK* cluster_sdk_;

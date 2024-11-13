@@ -147,7 +147,9 @@ common zookeeper_mt tcmalloc_minimal
 ${VM_LIBS}
 ${LLVM_LIBS}
 ${ZETASQL_LIBS}
-${BRPC_LIBS})
+${BRPC_LIBS}
+TBB::tbb
+)
 
 if(TESTING_ENABLE)
     add_subdirectory(test)

@@ -329,16 +329,16 @@ std::shared_ptr<::hybridse::type::Database> TabletCatalog::GetDatabase(const std
 
 std::shared_ptr<::hybridse::vm::TableHandler> TabletCatalog::GetTable(const std::string& db,
                                                                       const std::string& table_name) {
-    absl::ReaderMutexLock lock(&mu_);
-    auto db_it = tables_.find(db);
-    if (db_it == tables_.end()) {
+    TabletTables::const_accessor db_acc;
+    if (!tables_.find(db_acc, db)) {
         return std::shared_ptr<::hybridse::vm::TableHandler>();
     }
-    auto it = db_it->second.find(table_name);
-    if (it == db_it->second.end()) {
+
+    TabletTables::value_type::second_type::const_accessor tb_acc;
+    if (!db_acc->second.find(tb_acc, table_name)) {
         return std::shared_ptr<::hybridse::vm::TableHandler>();
     }
-    return it->second;
+    return tb_acc->second;
 }
 
 bool TabletCatalog::AddTable(const ::openmldb::api::TableMeta& meta,
@@ -349,15 +349,17 @@ bool TabletCatalog::AddTable(const ::openmldb::api::TableMeta& meta,
     }
     const std::string& db_name = meta.db();
     std::shared_ptr<TabletTableHandler> handler;
-    absl::WriterMutexLock lock(&mu_);
-    auto db_it = tables_.find(db_name);
-    if (db_it == tables_.end()) {
-        auto result = tables_.emplace(db_name, std::map<std::string, std::shared_ptr<TabletTableHandler>>());
-        db_it = result.first;
+
+    // absl::WriterMutexLock lock(&mu_);
+    TabletTables::accessor db_it;
+    if (!tables_.find(db_it, db_name)) {
+        tables_.emplace(db_it, db_name, tbb::concurrent_hash_map<std::string, std::shared_ptr<TabletTableHandler>>());
     }
+
     const std::string& table_name = meta.name();
-    auto it = db_it->second.find(table_name);
-    if (it != db_it->second.end()) {
+
+    TabletTables::value_type::second_type::accessor it;
+    if (db_it->second.find(it, table_name)) {
         if (it->second->GetTid() < static_cast<uint32_t>(meta.tid())) {
             db_it->second.erase(it);
         } else if (it->second->GetTid() > static_cast<uint32_t>(meta.tid())) {
@@ -381,23 +383,23 @@ bool TabletCatalog::AddTable(const ::openmldb::api::TableMeta& meta,
 }
 
 bool TabletCatalog::AddDB(const ::hybridse::type::Database& db) {
-    absl::WriterMutexLock lock(&mu_);
+    // absl::WriterMutexLock lock(&mu_);
     TabletDB::iterator it = db_.find(db.name());
     if (it != db_.end()) {
         return false;
     }
-    tables_.insert(std::make_pair(db.name(), std::map<std::string, std::shared_ptr<TabletTableHandler>>()));
+    tables_.insert(std::make_pair(db.name(), TabletTables::value_type::second_type{}));
     return true;
 }
 
 bool TabletCatalog::DeleteTable(const std::string& db, const std::string& table_name, uint32_t tid, uint32_t pid) {
-    absl::WriterMutexLock lock(&mu_);
-    auto db_it = tables_.find(db);
-    if (db_it == tables_.end()) {
+    // absl::WriterMutexLock lock(&mu_);
+    TabletTables::accessor db_it;
+    if (!tables_.find(db_it, db)) {
         return false;
     }
-    auto it = db_it->second.find(table_name);
-    if (it == db_it->second.end()) {
+    TabletTables::value_type::second_type::const_accessor it;
+    if (!db_it->second.find(it, table_name)) {
         return false;
     }
     if (it->second->GetTid() > tid) {
@@ -451,14 +453,14 @@ bool TabletCatalog::UpdateTableMeta(const ::openmldb::api::TableMeta& meta) {
     const std::string& db_name = meta.db();
     const std::string& table_name = meta.name();
     std::shared_ptr<TabletTableHandler> handler;
-    absl::WriterMutexLock lock(&mu_);
-    auto db_it = tables_.find(db_name);
-    if (db_it == tables_.end()) {
+    // absl::WriterMutexLock lock(&mu_);
+    TabletTables::const_accessor db_it;
+    if (!tables_.find(db_it, db_name)) {
         LOG(WARNING) << "db " << db_name << " does not exist";
         return false;
     }
-    auto it = db_it->second.find(table_name);
-    if (it == db_it->second.end()) {
+    TabletTables::value_type::second_type::const_accessor it;
+    if (!db_it->second.find(it, table_name)) {
         LOG(WARNING) << "table " << table_name << " does not exist in db " << db_name;
         return false;
     } else if (it->second->GetTid() != static_cast<uint32_t>(meta.tid())) {
@@ -476,14 +478,13 @@ bool TabletCatalog::UpdateTableInfo(const ::openmldb::nameserver::TableInfo& tab
     const std::string& table_name = table_info.name();
     std::shared_ptr<TabletTableHandler> handler;
     {
-        absl::WriterMutexLock lock(&mu_);
-        auto db_it = tables_.find(db_name);
-        if (db_it == tables_.end()) {
-            auto result = tables_.emplace(db_name, std::map<std::string, std::shared_ptr<TabletTableHandler>>());
-            db_it = result.first;
+        // absl::WriterMutexLock lock(&mu_);
+        TabletTables::accessor db_it;
+        TabletTables::value_type::second_type::const_accessor it;
+        if (!tables_.find(db_it, db_name)) {
+            tables_.emplace(db_it, db_name, TabletTables::value_type::second_type{});
         }
-        auto it = db_it->second.find(table_name);
-        if (it != db_it->second.end()) {
+        if (db_it->second.find(it, table_name)) {
             if (table_info.tid() > it->second->GetTid()) {
                 db_it->second.erase(it);
             } else if (table_info.tid() < it->second->GetTid()) {
@@ -535,27 +536,29 @@ void TabletCatalog::Refresh(const std::vector<::openmldb::nameserver::TableInfo>
         cur_db_it->second.insert(table_name);
     }
 
-    absl::WriterMutexLock lock(&mu_);
     for (auto db_it = tables_.begin(); db_it != tables_.end();) {
         auto cur_db_it = table_map.find(db_it->first);
         if (cur_db_it == table_map.end()) {
             LOG(INFO) << "delete db from catalog. db: " << db_it->first;
-            db_it = tables_.erase(db_it);
+            tables_.erase(db_it->first);
+            ++db_it;
             continue;
         }
         for (auto table_it = db_it->second.begin(); table_it != db_it->second.end();) {
             if (cur_db_it->second.find(table_it->first) == cur_db_it->second.end() &&
                 !table_it->second->HasLocalTable()) {
                 LOG(INFO) << "delete table from catalog. db: " << db_it->first << ", table: " << table_it->first;
-                table_it = db_it->second.erase(table_it);
+                db_it->second.erase(table_it->first);
                 *updated = true;
-                continue;
             }
             ++table_it;
         }
         ++db_it;
     }
-    db_sp_map_ = db_sp_map;
+    {
+        absl::WriterMutexLock lock(&mu_);
+        db_sp_map_ = db_sp_map;
+    }
     version_.store(version, std::memory_order_relaxed);
     LOG(INFO) << "refresh catalog. version " << version;
 }

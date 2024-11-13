@@ -80,7 +80,7 @@ if(TESTING_ENABLE)
     target_link_libraries(options_map_parser_test ${BIN_LIBS})
 endif()
 
-set(SDK_LIBS openmldb_sdk openmldb_catalog client zk_client schema openmldb_flags openmldb_codec openmldb_proto base auth hybridse_sdk zookeeper_mt)
+set(SDK_LIBS openmldb_sdk openmldb_catalog client zk_client schema openmldb_flags openmldb_codec openmldb_proto base auth hybridse_sdk zookeeper_mt TBB::tbb)
 
 if(SQL_PYSDK_ENABLE)
     find_package(Python3 COMPONENTS Interpreter Development)

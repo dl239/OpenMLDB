@@ -193,7 +193,12 @@ bool SQLClusterRouter::Init() {
         while (rs->Next()) {
             key = rs->GetStringUnsafe(0);
             value = rs->GetStringUnsafe(1);
-            session_variables_[key] = value;
+            decltype(session_variables_)::accessor ac;
+            if (!session_variables_.find(ac, key)) {
+                session_variables_.emplace(ac, key, value);
+            } else {
+                ac->second = value;
+            }
         }
     } else {
         // if not allowed to get system table or system table is empty, init session here
@@ -3497,9 +3502,8 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteOfflineQuery(
 }
 
 ::hybridse::vm::EngineMode SQLClusterRouter::GetDefaultEngineMode() const {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
-    auto it = session_variables_.find("execute_mode");
-    if (it != session_variables_.end()) {
+    decltype(session_variables_)::const_accessor it;
+    if (session_variables_.find(it, "execute_mode")) {
         // 1. infer from system variable
         auto m = hybridse::vm::UnparseEngineMode(it->second).value_or(hybridse::vm::EngineMode::kBatchMode);
 
@@ -3514,47 +3518,41 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteOfflineQuery(
 }
 
 bool SQLClusterRouter::IsOnlineMode() const {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
-    auto it = session_variables_.find("execute_mode");
-    if (it != session_variables_.end() && (it->second == "online" || it->second == "request")) {
-        return true;
+    decltype(session_variables_)::const_accessor it;
+    if (session_variables_.find(it, "execute_mode")) {
+    return (it->second == "online" || it->second == "request");
     }
     return false;
 }
 bool SQLClusterRouter::IsEnableTrace() {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
-    auto it = session_variables_.find("enable_trace");
-    if (it != session_variables_.end() && it->second == "true") {
-        return true;
+    decltype(session_variables_)::const_accessor it;
+    if (session_variables_.find(it, "enable_trace")) {
+        return it->second == "true";
     }
     return false;
 }
 
 bool SQLClusterRouter::IsSyncJob() {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
-    auto it = session_variables_.find("sync_job");
-    if (it != session_variables_.end() && it->second == "true") {
-        return true;
+    decltype(session_variables_)::const_accessor it;
+    if (session_variables_.find(it, "sync_job")) {
+        return it->second == "true";
     }
     return false;
 }
 
 bool SQLClusterRouter::ANSISQLRewriterEnabled() {
     // TODO(xxx): mark fn const
-
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
-    auto it = session_variables_.find("ansi_sql_rewriter");
-    if (it != session_variables_.end() && it->second == "false") {
-        return false;
+    decltype(session_variables_)::const_accessor it;
+    if (session_variables_.find(it, "ansi_sql_rewriter")) {
+        return it->second == "true";
     }
     // TODO(xxx): always disable by default
     return true;
 }
 
 int SQLClusterRouter::GetJobTimeout() {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
-    auto it = session_variables_.find("job_timeout");
-    if (it != session_variables_.end()) {
+    decltype(session_variables_)::const_accessor it;
+    if (session_variables_.find(it, "job_timeout")) {
         int new_timeout = 0;
         if (absl::SimpleAtoi(it->second, &new_timeout)) {
             return new_timeout;
@@ -3565,9 +3563,8 @@ int SQLClusterRouter::GetJobTimeout() {
 }
 
 std::string SQLClusterRouter::GetSparkConfig() {
-    std::lock_guard<::openmldb::base::SpinMutex> lock(mu_);
-    auto it = session_variables_.find("spark_config");
-    if (it != session_variables_.end()) {
+    decltype(session_variables_)::const_accessor it;
+    if (session_variables_.find(it, "spark_config")) {
         return it->second;
     }
 
@@ -3630,7 +3627,12 @@ std::string SQLClusterRouter::GetSparkConfig() {
     } else {
         return {};
     }
-    session_variables_[key] = value;
+    decltype(session_variables_)::accessor ac;
+    if (!session_variables_.find(ac, key)) {
+        session_variables_.emplace(ac, key, value);
+    } else {
+        ac->second = value;
+    }
     return {};
 }
 

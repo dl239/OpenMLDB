@@ -10,6 +10,3 @@
 [submodule "contrib/rapidjson"]
 	path = contrib/rapidjson
 	url = https://github.com/Tencent/rapidjson.git
-[submodule "oneTBB"]
-	path = contrib/oneTBB
-	url = git@github.com:oneapi-src/oneTBB
