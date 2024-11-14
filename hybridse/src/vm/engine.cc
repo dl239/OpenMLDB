@@ -391,8 +391,6 @@ bool Engine::Explain(const std::string& sql, const std::string& db, EngineMode e
 }
 
 void Engine::ClearCacheLocked(const std::string& db) {
-    // LRU entry itself is thread-safe, but the hash map contains it is not
-    absl::WriterMutexLock lock(&mu_);
     if (db.empty()) {
         lru_cache_.clear();
         return;
@@ -409,19 +407,18 @@ EngineOptions Engine::GetEngineOptions() {
 
 std::shared_ptr<CompileInfo> Engine::GetCacheLocked(const std::string& db, const std::string& sql,
                                                     EngineMode engine_mode) {
-    absl::ReaderMutexLock l(&mu_);
     // Check mode
-    auto mode_iter = lru_cache_.find(engine_mode);
-    if (mode_iter == lru_cache_.end()) {
+    EngineLRUCache::const_accessor mode_iter;
+    if (!lru_cache_.find(mode_iter, engine_mode)) {
         return nullptr;
     }
     auto& mode_cache = mode_iter->second;
     // Check db
-    auto db_iter = mode_cache.find(db);
-    if (db_iter == mode_cache.end()) {
+    decltype(mode_iter->second)::accessor db_iter;
+    if (!mode_cache.find(db_iter, db)) {
         return nullptr;
     }
-    auto& lru = db_iter->second;
+    auto& lru = *db_iter->second.get();
     auto handle = lru[sql];
 
     return handle.value();
@@ -429,11 +426,21 @@ std::shared_ptr<CompileInfo> Engine::GetCacheLocked(const std::string& db, const
 
 bool Engine::SetCacheLocked(const std::string& db, const std::string& sql, EngineMode engine_mode,
                             std::shared_ptr<CompileInfo> info) {
-    absl::ReaderMutexLock lock(&mu_);
-    auto& mode_cache = lru_cache_[engine_mode];
-    auto [db_iter, inserted] = mode_cache.try_emplace(
-        db, [](std::string key) -> std::shared_ptr<CompileInfo> { return nullptr; }, options_.GetMaxSqlCacheSize());
-    auto& lru = db_iter->second;
+    EngineLRUCache::accessor mode_iter;
+    if (!lru_cache_.find(mode_iter, engine_mode)) {
+        lru_cache_.emplace(mode_iter, engine_mode, EngineLRUCache::value_type::second_type{});
+    }
+
+    auto& db_map = mode_iter->second;
+    decltype(mode_iter->second)::accessor db_iter;
+    if (!db_map.find(db_iter, db)) {
+        db_map.emplace(db_iter, db,
+                       std::make_shared<tbb::concurrent_lru_cache<std::string, std::shared_ptr<CompileInfo>>>(
+                           [](std::string key) -> std::shared_ptr<CompileInfo> { return nullptr; },
+                           options_.GetMaxSqlCacheSize()));
+    }
+
+    auto& lru = *db_iter->second.get();
     auto handle = lru[sql];
     if (handle.value() == nullptr) {
         handle.value() = info;

@@ -190,6 +190,7 @@ using hybridse::node::DataType;
 %ignore hybridse::vm::MemCatalog::~MemCatalog;
 %ignore hybridse::vm::AscComparor::operator();
 %ignore hybridse::vm::DescComparor::operator();
+%ignore hybridse::vm::RunSessionBuilder::build;
 
 %include "base/fe_status.h"
 %include "codec/row.h"

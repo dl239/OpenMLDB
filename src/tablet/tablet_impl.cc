@@ -1791,7 +1791,7 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
                 return;
             }
 
-            auto session = *std::dynamic_pointer_cast<hybridse::vm::BatchRunSession>(session_ptr.value());
+            auto& session = *dynamic_cast<hybridse::vm::BatchRunSession*>(session_ptr.value().get());
 
             ::hybridse::codec::Row parameter_row;
             auto& request_buf = static_cast<brpc::Controller*>(ctrl)->request_attachment();
@@ -1858,7 +1858,7 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
                 response->set_code(::openmldb::base::kSQLCompileError);
                 return;
             }
-            auto session = *std::dynamic_pointer_cast<hybridse::vm::RequestRunSession>(session_rs.value());
+            auto& session = *dynamic_cast<hybridse::vm::RequestRunSession*>(session_rs.value().get());
             RunRequestQuery(ctrl, *request, session, *response, *buf);
 
             const std::string& sql = session.GetCompileInfo()->GetSql();
@@ -1882,7 +1882,7 @@ void TabletImpl::ProcessQuery(bool is_sub, RpcController* ctrl, const openmldb::
                 response->set_code(::openmldb::base::kSQLCompileError);
                 return;
             }
-            auto session = *std::dynamic_pointer_cast<hybridse::vm::BatchRequestRunSession>(session_rs.value());
+            auto& session = *dynamic_cast<hybridse::vm::BatchRequestRunSession*>(session_rs.value().get());
 
             auto info = std::dynamic_pointer_cast<hybridse::vm::SqlCompileInfo>(session.GetCompileInfo());
             if (info && info->get_sql_context().request_rows.empty()) {

@@ -48,10 +48,8 @@ public class Statement implements java.sql.Statement {
         resultSet = sqlRouter.ExecuteSQL(sql, status);
         if (!status.IsOK()) {
             String msg = status.ToString();
-            status.delete();
             throw new SQLException("executeSQL fail: " + msg);
         }
-        status.delete();
         return new NativeResultSet(resultSet);
     }
 

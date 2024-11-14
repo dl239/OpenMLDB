@@ -27,6 +27,7 @@
 #include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "codec/fe_row_codec.h"
+#include "oneapi/tbb/concurrent_hash_map.h"
 #include "tbb/concurrent_lru_cache.h"
 #include "vm/catalog.h"
 #include "vm/engine_context.h"
@@ -39,15 +40,15 @@ using ::hybridse::codec::Row;
 
 inline constexpr const char* LONG_WINDOWS = "long_windows";
 
-using BoostLRU = tbb::concurrent_lru_cache<std::string, std::shared_ptr<CompileInfo>>;
+using BoostLRU = std::shared_ptr<tbb::concurrent_lru_cache<std::string, std::shared_ptr<CompileInfo>>>;
 
 /// @typedef EngineLRUCache
 /// - EngineMode
 ///     - DB name
 ///       - SQL string
 ///           - CompileInfo
-typedef absl::node_hash_map<EngineMode,
-        absl::node_hash_map<std::string, BoostLRU>>
+typedef tbb::concurrent_hash_map<EngineMode,
+        tbb::concurrent_hash_map<std::string, BoostLRU>>
     EngineLRUCache;
 
 class SqlContext;
@@ -331,24 +332,22 @@ class RunSessionBuilder {
     RunSessionBuilder()  {}
     ~RunSessionBuilder() {}
 
-    absl::StatusOr<std::shared_ptr<RunSession>> build() {
-        std::shared_ptr <RunSession> s;
+    absl::StatusOr<std::unique_ptr<RunSession>> build() {
+        std::unique_ptr <RunSession> s;
         switch (mode) {
             case EngineMode::kBatchMode: {
-                 auto ss = std::make_shared<BatchRunSession>();
-                 ss->SetParameterSchema(parameter_schema_);
-                 s = ss;
+                auto ss = std::make_unique<BatchRunSession>();
+                ss->SetParameterSchema(parameter_schema_);
+                s = std::move(ss);
                 break;
             }
             case EngineMode::kRequestMode: {
-                auto ss = std::make_shared<RequestRunSession>();
-                ss->SetSpName(sp_name_);
-                s = ss;
+                s = std::make_unique<RequestRunSession>();
+                s->SetSpName(sp_name_);
                 break;
             }
             case EngineMode::kBatchRequestMode: {
-                auto ss = std::make_shared<BatchRequestRunSession>();
-                s = ss;
+                s = std::make_unique<BatchRequestRunSession>();
                 break;
             }
             default:

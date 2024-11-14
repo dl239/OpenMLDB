@@ -2970,7 +2970,7 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
     status->SetOK();
 
     std::string sql = str;
-    if (ANSISQLRewriterEnabled()) {
+    // if (ANSISQLRewriterEnabled()) {
         // If true, enable the ANSI SQL rewriter that would rewrite some SQL query
         // for pre-defined pattern to OpenMLDB SQL extensions. Rewrite phase is before general SQL compilation.
         //
@@ -2994,7 +2994,7 @@ std::shared_ptr<hybridse::sdk::ResultSet> SQLClusterRouter::ExecuteSQL(
                 return ExecuteOfflineQuery(db, sql, is_sync_job, offline_job_timeout, status);
             }
         }
-    }
+    // }
 
     hybridse::vm::SqlContext ctx;
     ctx.engine_mode = GetDefaultEngineMode();
