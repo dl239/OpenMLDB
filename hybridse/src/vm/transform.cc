@@ -1684,9 +1684,6 @@ Status BatchModeTransformer::ValidatePartitionDataProvider(PhysicalOpNode* in) {
         kPhysicalOpRename == in->GetOpType() || kPhysicalOpFilter == in->GetOpType()) {
         CHECK_STATUS(ValidatePartitionDataProvider(in->GetProducer(0)))
     } else if (kPhysicalOpProject == in->GetOpType()) {
-        auto* prj = dynamic_cast<vm::PhysicalProjectNode*>(in);
-        CHECK_TRUE(prj->project_type_ == kAggregation, kPlanError,
-                   "can't optimize project node: ", in->GetTreeString());
         CHECK_STATUS(ValidatePartitionDataProvider(in->GetProducer(0)));
     } else if (kPhysicalOpRequestJoin == in->GetOpType()) {
         CHECK_STATUS(ValidatePartitionDataProvider(in->GetProducer(0)));

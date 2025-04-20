@@ -1389,8 +1389,15 @@ std::shared_ptr<DataHandler> FilterRunner::Run(
         case kPartitionHandler: {
             return filter_gen_.Filter(std::dynamic_pointer_cast<PartitionHandler>(input), parameter, limit_cnt_);
         }
+        case kRowHandler: {
+            auto row = std::dynamic_pointer_cast<RowHandler>(input)->GetValue();
+            if (filter_gen_(row, parameter)) {
+                return input;
+            }
+            return {};
+        }
         default: {
-            LOG(WARNING) << "fail to filter when input is row";
+            LOG(WARNING) << "fail to filter for unknown input handler type " << input->GetHandlerTypeName();
             return fail_ptr;
         }
     }
