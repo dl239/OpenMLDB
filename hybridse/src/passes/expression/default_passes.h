@@ -28,7 +28,7 @@ namespace passes {
 
 void AddDefaultExprOptPasses(node::ExprAnalysisContext* ctx,
                              ExprPassGroup* group) {
-    group->AddPass(std::make_shared<passes::MergeAggregations>());
+    // group->AddPass(std::make_shared<passes::MergeAggregations>());
     group->AddPass(std::make_shared<passes::ExprSimplifier>());
     group->AddPass(std::make_shared<passes::ResolveFnAndAttrs>(ctx));
 }
