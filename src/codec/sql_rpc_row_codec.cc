@@ -76,21 +76,23 @@ bool EncodeRpcRow(const hybridse::codec::Row& row, butil::IOBuf* buf, size_t* to
     }
     *total_size = 0;
     size_t slice_num = row.GetRowPtrCnt();
-    for (size_t i = 0; i < slice_num; ++i) {
-        int8_t* slice_buf = row.buf(i);
-        size_t slice_size = row.size(i);
-        int code;
-        if (slice_buf == nullptr || slice_size == 0) {
-            char empty_header[6] = {1, 1, 0, 0, 0, 0};
-            code = buf->append(empty_header, 6);
-            *total_size += 6;
-        } else {
-            code = buf->append(slice_buf, slice_size);
-            *total_size += slice_size;
-        }
-        if (code != 0) {
-            LOG(WARNING) << "Append " << i << "th slice of size " << slice_size << " failed";
-            return false;
+    if (!row.empty()) {
+        for (size_t i = 0; i < slice_num; ++i) {
+            int8_t* slice_buf = row.buf(i);
+            size_t slice_size = row.size(i);
+            int code;
+            if (slice_buf == nullptr || slice_size == 0) {
+                char empty_header[6] = {1, 1, 0, 0, 0, 0};
+                code = buf->append(empty_header, 6);
+                *total_size += 6;
+            } else {
+                code = buf->append(slice_buf, slice_size);
+                *total_size += slice_size;
+            }
+            if (code != 0) {
+                LOG(WARNING) << "Append " << i << "th slice of size " << slice_size << " failed";
+                return false;
+            }
         }
     }
     return true;
