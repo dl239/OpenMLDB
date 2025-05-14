@@ -1394,7 +1394,8 @@ std::shared_ptr<DataHandler> FilterRunner::Run(
             if (filter_gen_(row, parameter)) {
                 return input;
             }
-            return {};
+
+            return std::make_shared<MemRowHandler>(codec::Row());
         }
         default: {
             LOG(WARNING) << "fail to filter for unknown input handler type " << input->GetHandlerTypeName();
