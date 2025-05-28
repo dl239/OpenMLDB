@@ -25,6 +25,9 @@ import java.util.Properties;
 public class BenchmarkConfig {
     public static String ZK_CLUSTER = "127.0.0.1:6181";
     public static String ZK_PATH="/onebox";
+    public static int THREADS;
+    public static int ITERATIONS = 1;
+    public static int BENCHMARK_TIME = 30;
 
     public static String DATABASE = "";
     public static int WINDOW_NUM = 2;
@@ -49,6 +52,8 @@ public class BenchmarkConfig {
             prop.load(BenchmarkConfig.class.getClassLoader().getResourceAsStream("conf.properties"));
             ZK_CLUSTER = prop.getProperty("ZK_CLUSTER");
             ZK_PATH = prop.getProperty("ZK_PATH");
+            THREADS = Integer.valueOf(prop.getProperty("THREADS", "10"));
+            BENCHMARK_TIME = Integer.valueOf(prop.getProperty("BENCHMARK_TIME", "30"));
             PK_BASE = Integer.parseInt(prop.getProperty("PK_BASE"));
             DATABASE = prop.getProperty("DATABASE");
             DEPLOY_NAME = prop.getProperty("DEPLOY_NAME");

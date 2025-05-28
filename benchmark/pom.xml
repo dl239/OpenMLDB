@@ -12,7 +12,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xs
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jedis.version>5.1.2</jedis.version>
-        <openmldb.sdk.version>0.8.5</openmldb.sdk.version>
+        <openmldb.sdk.version>0.9.3</openmldb.sdk.version>
     </properties>
 
     <dependencies>
@@ -25,6 +25,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xs
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-generator-annprocess</artifactId>
             <version>1.32</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.4paradigm.openmldb</groupId>
@@ -34,7 +35,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xs
         <dependency>
             <groupId>com.4paradigm.openmldb</groupId>
             <artifactId>openmldb-native</artifactId>
-            <version>${openmldb.sdk.version}-allinone</version>
+            <version>${openmldb.sdk.version}-linux-x86_64</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
